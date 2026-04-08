@@ -12,24 +12,28 @@ import {
     Divider,
     Alert,
     CircularProgress,
+    IconButton,
 } from "@mui/material";
 
 import {
     Lock,
     LockOpen,
+    AddCircleOutline,
+    RemoveCircleOutline,
+    CloudUpload,
 } from "@mui/icons-material";
 
 const initialState = {
     title: "",
     department: "",
-    eligibility: "", // Now used for HTML/Markdown content
+    eligibility: "",
     category: "",
     description: "",
-    applyLink: "",
+    applyLink: "", // Keeping this if you still need a primary direct link
     lastDate: "",
     ageLimit: "",
-    applicationFee: "", 
-    vacancy: "", 
+    applicationFee: "",
+    vacancy: "",
     importantDates: {
         applicationBegin: "",
         lastDateApply: "",
@@ -38,8 +42,9 @@ const initialState = {
         admitCard: "",
     },
     importantLinks: {
-        applyOnline: "",
-        downloadNotification: "",
+        // Updated to handle multiple dynamic links
+        applyOnline: [{ label: "Apply Online", url: "" }],
+        downloadNotification: [{ label: "Download Notification", url: "", file: null, fileName: "" }],
         officialWebsite: "",
     },
 };
@@ -52,6 +57,7 @@ export default function AddJob() {
     const [authError, setAuthError] = useState(null);
     const [statusMessage, setStatusMessage] = useState(null);
 
+    // Standard text field changes
     const handleChange = (e) => {
         const { name, value } = e.target;
         if (name.includes(".")) {
@@ -63,6 +69,48 @@ export default function AddJob() {
         } else {
             setJobData((prev) => ({ ...prev, [name]: value }));
         }
+    };
+
+    // Handlers for dynamic array fields (Apply Online & Notifications)
+    const handleDynamicLinkChange = (category, index, field, value) => {
+        const updatedArray = [...jobData.importantLinks[category]];
+        updatedArray[index][field] = value;
+        setJobData((prev) => ({
+            ...prev,
+            importantLinks: { ...prev.importantLinks, [category]: updatedArray },
+        }));
+    };
+
+    const handleFileChange = (index, e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const updatedArray = [...jobData.importantLinks.downloadNotification];
+            updatedArray[index].file = file;
+            updatedArray[index].fileName = file.name;
+            updatedArray[index].url = ""; // Clear URL if file is uploaded
+            setJobData((prev) => ({
+                ...prev,
+                importantLinks: { ...prev.importantLinks, downloadNotification: updatedArray },
+            }));
+        }
+    };
+
+    const addDynamicLink = (category, template) => {
+        setJobData((prev) => ({
+            ...prev,
+            importantLinks: {
+                ...prev.importantLinks,
+                [category]: [...prev.importantLinks[category], template],
+            },
+        }));
+    };
+
+    const removeDynamicLink = (category, index) => {
+        const updatedArray = jobData.importantLinks[category].filter((_, i) => i !== index);
+        setJobData((prev) => ({
+            ...prev,
+            importantLinks: { ...prev.importantLinks, [category]: updatedArray },
+        }));
     };
 
     const handleAuth = () => {
@@ -79,25 +127,47 @@ export default function AddJob() {
         setLoading(true);
         setStatusMessage(null);
 
-        const cleanedJobData = {
-            ...jobData,
-            applyLink: jobData.applyLink.trim(),
-            lastDate: jobData.lastDate.trim(),
-            title: jobData.title.trim(),
-            department: jobData.department.trim(),
-            category: jobData.category.trim(),
-            eligibility: jobData.eligibility.trim(),
-            ageLimit: jobData.ageLimit.trim(),
-            description: jobData.description.trim(),
-            applicationFee: jobData.applicationFee.trim(),
-            vacancy: jobData.vacancy.trim(),
-        };
-
         try {
+            // Because we are uploading files, we MUST use FormData instead of a standard JSON object
+            const formData = new FormData();
+
+            // 1. Append standard flat fields
+            const textFields = ["title", "department", "eligibility", "category", "description", "applyLink", "lastDate", "ageLimit", "applicationFee", "vacancy"];
+            textFields.forEach((field) => {
+                formData.append(field, jobData[field].trim());
+            });
+
+            // 2. Append Important Dates (as JSON string)
+            formData.append("importantDates", JSON.stringify(jobData.importantDates));
+
+            // 3. Append Official Website
+            formData.append("officialWebsite", jobData.importantLinks.officialWebsite.trim());
+
+            // 4. Append Dynamic Apply Links (as JSON string)
+            formData.append("applyOnline", JSON.stringify(jobData.importantLinks.applyOnline));
+
+            // 5. Append Notification Links & Files
+            const notificationData = [];
+            jobData.importantLinks.downloadNotification.forEach((item, index) => {
+                if (item.file) {
+                    // Append the actual file to FormData
+                    const fileKey = `notification_file_${index}`;
+                    formData.append(fileKey, item.file);
+                    
+                    // Keep a record of it for the database payload
+                    notificationData.push({ label: item.label, fileKey: fileKey, isUploadedFile: true });
+                } else {
+                    notificationData.push({ label: item.label, url: item.url, isUploadedFile: false });
+                }
+            });
+            formData.append("downloadNotification", JSON.stringify(notificationData));
+
             const res = await axios.post(
                 "https://www.finderight.com/api/jobs",
-                cleanedJobData
+                formData
+                
             );
+
             setStatusMessage({ message: "Job added successfully!", severity: "success" });
             setJobData(initialState);
         } catch (err) {
@@ -196,7 +266,7 @@ export default function AddJob() {
                         {[
                             ["lastDate", "Application Last Date (YYYY-MM-DD)", { type: 'date', required: true }],
                             ["ageLimit", "Age Limit (e.g., 18-30)", { required: false }],
-                            ["applyLink", "Direct Apply Link (URL)", { required: true }],
+                            ["applyLink", "Direct Apply Link (Main URL)", { required: false }], // Kept as optional legacy support
                         ].map(([name, label, options]) => (
                             <Grid item key={name} xs={12} sm={6} md={4}>
                                 <TextField
@@ -229,7 +299,6 @@ export default function AddJob() {
                             />
                         </Grid>
 
-                        {/* --- Eligibility, Fee & Vacancy (HTML Support) --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mb: 2, fontWeight: 'bold', color: '#1976d2' }}>🎓 Eligibility Criteria</Divider>
                             <TextField
@@ -243,7 +312,6 @@ export default function AddJob() {
                                 onChange={handleChange}
                                 variant="outlined"
                             />
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>Enter detailed educational requirements. Supports HTML lists and tables.</Typography>
                         </Grid>
 
                         <Grid item xs={12} md={6}>
@@ -291,21 +359,106 @@ export default function AddJob() {
                             </Grid>
                         ))}
 
+                        {/* --- NEW DYNAMIC LINKS SECTION --- */}
                         <Grid item xs={12}>
-                            <Divider sx={{ mt: 2, mb: 2, fontWeight: 'bold' }}>🔗 Official Resources (URLs)</Divider>
+                            <Divider sx={{ mt: 4, mb: 2, fontWeight: 'bold' }}>🔗 Multiple Apply Online Links</Divider>
+                            {jobData.importantLinks.applyOnline.map((item, index) => (
+                                <Grid container spacing={2} alignItems="center" key={index} sx={{ mb: 2 }}>
+                                    <Grid item xs={12} sm={4}>
+                                        <TextField
+                                            fullWidth
+                                            label="Link Label (e.g., Registration / Login)"
+                                            value={item.label}
+                                            onChange={(e) => handleDynamicLinkChange("applyOnline", index, "label", e.target.value)}
+                                            size="small"
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={7}>
+                                        <TextField
+                                            fullWidth
+                                            label="URL"
+                                            value={item.url}
+                                            onChange={(e) => handleDynamicLinkChange("applyOnline", index, "url", e.target.value)}
+                                            size="small"
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={1}>
+                                        <IconButton color="error" onClick={() => removeDynamicLink("applyOnline", index)} disabled={jobData.importantLinks.applyOnline.length === 1}>
+                                            <RemoveCircleOutline />
+                                        </IconButton>
+                                    </Grid>
+                                </Grid>
+                            ))}
+                            <Button startIcon={<AddCircleOutline />} onClick={() => addDynamicLink("applyOnline", { label: "Apply Online Server 2", url: "" })} variant="text">
+                                Add Another Apply Link
+                            </Button>
                         </Grid>
-                        {Object.entries(jobData.importantLinks).map(([key, val]) => (
-                            <Grid item key={`importantLinks.${key}`} xs={12} sm={6} md={4}>
-                                <TextField
-                                    fullWidth
-                                    label={key.replace(/([A-Z])/g, " $1").toUpperCase()}
-                                    name={`importantLinks.${key}`}
-                                    value={val}
-                                    onChange={handleChange}
-                                    variant="outlined"
-                                />
-                            </Grid>
-                        ))}
+
+                        <Grid item xs={12}>
+                            <Divider sx={{ mt: 2, mb: 2, fontWeight: 'bold' }}>📄 Notification Downloads (Links or File Upload)</Divider>
+                            {jobData.importantLinks.downloadNotification.map((item, index) => (
+                                <Grid container spacing={2} alignItems="center" key={index} sx={{ mb: 2 }}>
+                                    <Grid item xs={12} sm={3}>
+                                        <TextField
+                                            fullWidth
+                                            label="Label (e.g., Download English PDF)"
+                                            value={item.label}
+                                            onChange={(e) => handleDynamicLinkChange("downloadNotification", index, "label", e.target.value)}
+                                            size="small"
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={4}>
+                                        <TextField
+                                            fullWidth
+                                            label="URL (Leave blank if uploading file)"
+                                            value={item.url}
+                                            disabled={!!item.file}
+                                            onChange={(e) => handleDynamicLinkChange("downloadNotification", index, "url", e.target.value)}
+                                            size="small"
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={4}>
+                                        <Button
+                                            variant={item.file ? "contained" : "outlined"}
+                                            component="label"
+                                            fullWidth
+                                            startIcon={<CloudUpload />}
+                                            color={item.file ? "success" : "primary"}
+                                            sx={{ height: '40px' }}
+                                        >
+                                            {item.fileName || "Upload PDF File"}
+                                            <input
+                                                type="file"
+                                                hidden
+                                                accept="application/pdf"
+                                                onChange={(e) => handleFileChange(index, e)}
+                                            />
+                                        </Button>
+                                    </Grid>
+                                    <Grid item xs={12} sm={1}>
+                                        <IconButton color="error" onClick={() => removeDynamicLink("downloadNotification", index)} disabled={jobData.importantLinks.downloadNotification.length === 1}>
+                                            <RemoveCircleOutline />
+                                        </IconButton>
+                                    </Grid>
+                                </Grid>
+                            ))}
+                            <Button startIcon={<AddCircleOutline />} onClick={() => addDynamicLink("downloadNotification", { label: "Download Hindi PDF", url: "", file: null, fileName: "" })} variant="text">
+                                Add Another Notification Option
+                            </Button>
+                        </Grid>
+
+                        <Grid item xs={12}>
+                            <Divider sx={{ mt: 2, mb: 2, fontWeight: 'bold' }}>🌐 Official Website</Divider>
+                            <TextField
+                                fullWidth
+                                label="OFFICIAL WEBSITE URL"
+                                name="importantLinks.officialWebsite"
+                                value={jobData.importantLinks.officialWebsite}
+                                onChange={handleChange}
+                                variant="outlined"
+                                size="small"
+                            />
+                        </Grid>
 
                         <Grid item xs={12} sx={{ textAlign: 'center', pt: 4 }}>
                             <Button
