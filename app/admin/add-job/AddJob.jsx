@@ -29,7 +29,7 @@ const initialState = {
     eligibility: "",
     category: "",
     description: "",
-    applyLink: "", // Keeping this if you still need a primary direct link
+    applyLink: "", 
     lastDate: "",
     ageLimit: "",
     applicationFee: "",
@@ -42,7 +42,6 @@ const initialState = {
         admitCard: "",
     },
     importantLinks: {
-        // Updated to handle multiple dynamic links
         applyOnline: [{ label: "Apply Online", url: "" }],
         downloadNotification: [{ label: "Download Notification", url: "", file: null, fileName: "" }],
         officialWebsite: "",
@@ -57,7 +56,6 @@ export default function AddJob() {
     const [authError, setAuthError] = useState(null);
     const [statusMessage, setStatusMessage] = useState(null);
 
-    // Standard text field changes
     const handleChange = (e) => {
         const { name, value } = e.target;
         if (name.includes(".")) {
@@ -71,7 +69,6 @@ export default function AddJob() {
         }
     };
 
-    // Handlers for dynamic array fields (Apply Online & Notifications)
     const handleDynamicLinkChange = (category, index, field, value) => {
         const updatedArray = [...jobData.importantLinks[category]];
         updatedArray[index][field] = value;
@@ -87,7 +84,7 @@ export default function AddJob() {
             const updatedArray = [...jobData.importantLinks.downloadNotification];
             updatedArray[index].file = file;
             updatedArray[index].fileName = file.name;
-            updatedArray[index].url = ""; // Clear URL if file is uploaded
+            updatedArray[index].url = ""; 
             setJobData((prev) => ({
                 ...prev,
                 importantLinks: { ...prev.importantLinks, downloadNotification: updatedArray },
@@ -128,7 +125,6 @@ export default function AddJob() {
         setStatusMessage(null);
 
         try {
-            // Because we are uploading files, we MUST use FormData instead of a standard JSON object
             const formData = new FormData();
 
             // 1. Append standard flat fields
@@ -150,11 +146,8 @@ export default function AddJob() {
             const notificationData = [];
             jobData.importantLinks.downloadNotification.forEach((item, index) => {
                 if (item.file) {
-                    // Append the actual file to FormData
                     const fileKey = `notification_file_${index}`;
                     formData.append(fileKey, item.file);
-                    
-                    // Keep a record of it for the database payload
                     notificationData.push({ label: item.label, fileKey: fileKey, isUploadedFile: true });
                 } else {
                     notificationData.push({ label: item.label, url: item.url, isUploadedFile: false });
@@ -165,15 +158,23 @@ export default function AddJob() {
             const res = await axios.post(
                 "https://www.finderight.com/api/jobs",
                 formData
-                
             );
 
             setStatusMessage({ message: "Job added successfully!", severity: "success" });
             setJobData(initialState);
         } catch (err) {
-            console.error("❌ Error:", err.response?.data || err.message);
-            const errorMessage = err.response?.data?.message || err.message || "Unknown error";
-            setStatusMessage({ message: `Failed to add job: ${errorMessage}`, severity: "error" });
+            console.error("❌ Error:", err);
+            
+            // 🔥 NEW: Check for Vercel's 4.5MB File Size Limit (413 Payload Too Large)
+            if (err.response?.status === 413) {
+                setStatusMessage({ 
+                    message: "Upload Failed: Your PDF is too large. Vercel limits uploads to 4.5MB. Please compress your file.", 
+                    severity: "error" 
+                });
+            } else {
+                const errorMessage = err.response?.data?.message || err.message || "Unknown error";
+                setStatusMessage({ message: `Failed to add job: ${errorMessage}`, severity: "error" });
+            }
         } finally {
             setLoading(false);
         }
@@ -266,7 +267,7 @@ export default function AddJob() {
                         {[
                             ["lastDate", "Application Last Date (YYYY-MM-DD)", { type: 'date', required: true }],
                             ["ageLimit", "Age Limit (e.g., 18-30)", { required: false }],
-                            ["applyLink", "Direct Apply Link (Main URL)", { required: false }], // Kept as optional legacy support
+                            ["applyLink", "Direct Apply Link (Main URL)", { required: false }], 
                         ].map(([name, label, options]) => (
                             <Grid item key={name} xs={12} sm={6} md={4}>
                                 <TextField
@@ -359,7 +360,6 @@ export default function AddJob() {
                             </Grid>
                         ))}
 
-                        {/* --- NEW DYNAMIC LINKS SECTION --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 4, mb: 2, fontWeight: 'bold' }}>🔗 Multiple Apply Online Links</Divider>
                             {jobData.importantLinks.applyOnline.map((item, index) => (
