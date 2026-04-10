@@ -152,7 +152,7 @@ const AdminEditAdmitCard = () => {
         <Box sx={{ maxWidth: 1000, mx: "auto", p: { xs: 2, md: 4 } }}>
             <Button 
                 startIcon={<ArrowBack />} 
-                onClick={() => router.push("/admin/admit-cards")} 
+                onClick={() => router.push("/admin/manage-admit-cards")} 
                 sx={{ mb: 2 }}
             >
                 Back to Admit Cards
