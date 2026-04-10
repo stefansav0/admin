@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
     TextField,
     Button,
@@ -16,24 +17,23 @@ import {
 import {
     AddCircleOutline,
     RemoveCircleOutline,
-    CheckCircleOutline,
+    SaveOutlined,
+    ArrowBack,
     FormatBold,
     FormatItalic,
     FormatListBulleted,
     FormatListNumbered
 } from "@mui/icons-material";
 import axios from "axios";
-import { useRouter } from "next/navigation";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
-// --- TipTap Editor Component ---
 // --- TipTap Editor Component ---
 const TipTapEditor = ({ content, onChange }) => {
     const editor = useEditor({
         extensions: [StarterKit],
         content: content,
-        immediatelyRender: false, // ✅ Added this line to fix the SSR hydration error!
+        immediatelyRender: false, // Prevents SSR hydration mismatch
         onUpdate: ({ editor }) => {
             onChange(editor.getHTML());
         },
@@ -48,80 +48,81 @@ const TipTapEditor = ({ content, onChange }) => {
 
     return (
         <div className="border border-gray-300 rounded-md overflow-hidden bg-white">
-            {/* Editor Toolbar */}
             <div className="bg-gray-50 border-b border-gray-300 p-1 flex gap-1">
-                <IconButton 
-                    size="small" 
-                    onClick={() => editor.chain().focus().toggleBold().run()}
-                    color={editor.isActive('bold') ? "primary" : "default"}
-                >
+                <IconButton size="small" onClick={() => editor.chain().focus().toggleBold().run()} color={editor.isActive('bold') ? "secondary" : "default"}>
                     <FormatBold fontSize="small" />
                 </IconButton>
-                <IconButton 
-                    size="small" 
-                    onClick={() => editor.chain().focus().toggleItalic().run()}
-                    color={editor.isActive('italic') ? "primary" : "default"}
-                >
+                <IconButton size="small" onClick={() => editor.chain().focus().toggleItalic().run()} color={editor.isActive('italic') ? "secondary" : "default"}>
                     <FormatItalic fontSize="small" />
                 </IconButton>
                 <Divider orientation="vertical" flexItem className="mx-1" />
-                <IconButton 
-                    size="small" 
-                    onClick={() => editor.chain().focus().toggleBulletList().run()}
-                    color={editor.isActive('bulletList') ? "primary" : "default"}
-                >
+                <IconButton size="small" onClick={() => editor.chain().focus().toggleBulletList().run()} color={editor.isActive('bulletList') ? "secondary" : "default"}>
                     <FormatListBulleted fontSize="small" />
                 </IconButton>
-                <IconButton 
-                    size="small" 
-                    onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                    color={editor.isActive('orderedList') ? "primary" : "default"}
-                >
+                <IconButton size="small" onClick={() => editor.chain().focus().toggleOrderedList().run()} color={editor.isActive('orderedList') ? "secondary" : "default"}>
                     <FormatListNumbered fontSize="small" />
                 </IconButton>
             </div>
-            {/* Editor Content Area */}
             <div className="cursor-text">
                 <EditorContent editor={editor} />
             </div>
         </div>
     );
 };
-// --- Main Form Component ---
-const initialState = {
-    title: "",
-    conductedby: "",
-    applicationBegin: "",
-    lastDateApply: "",
-    examDate: "",
-    admitcard: "",
-    answerKeyRelease: "",
-    howToCheck: "", // This will now hold HTML
-    publishDate: "",
-    importantLinks: {
-        // Dynamic array for multiple SEO-friendly download links
-        downloadAnswerKey: [{ label: "Download Answer Key", url: "" }],
-        officialWebsite: "",
-    },
-};
 
-const AdminAddAnswerKey = () => {
-    const [formData, setFormData] = useState(initialState);
-    const [loading, setLoading] = useState(false);
-    const [statusMessage, setStatusMessage] = useState(null);
+// --- Main Edit Component ---
+const AdminEditAnswerKey = () => {
+    const params = useParams();
     const router = useRouter();
+    const slug = params?.slug;
+
+    const [formData, setFormData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [statusMessage, setStatusMessage] = useState(null);
+
+    useEffect(() => {
+        const fetchAnswerKeyData = async () => {
+            try {
+                const res = await axios.get(`https://www.finderight.com/api/answer-keys/${slug}`);
+                const data = res.data.answerKey || res.data; 
+
+                // 🚨 SAFEGUARD: Handle both OLD (String) and NEW (Array) database schemas
+                let parsedLinks = { downloadAnswerKey: [{ label: "Download Answer Key", url: "" }], officialWebsite: "" };
+
+                if (data.importantLinks) {
+                    if (Array.isArray(data.importantLinks.downloadAnswerKey)) {
+                        parsedLinks.downloadAnswerKey = data.importantLinks.downloadAnswerKey;
+                    } else if (typeof data.importantLinks.downloadAnswerKey === 'string' && data.importantLinks.downloadAnswerKey) {
+                        parsedLinks.downloadAnswerKey = [{ label: "Download Answer Key", url: data.importantLinks.downloadAnswerKey }];
+                    }
+                    parsedLinks.officialWebsite = data.importantLinks.officialWebsite || "";
+                }
+
+                setFormData({
+                    ...data,
+                    importantLinks: parsedLinks
+                });
+            } catch (err) {
+                console.error(err);
+                setStatusMessage({ message: "Failed to load answer key data. It may have been deleted.", severity: "error" });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (slug) fetchAnswerKeyData();
+    }, [slug]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    // Handler specifically for TipTap HTML updates
     const handleTipTapChange = (htmlContent) => {
         setFormData((prev) => ({ ...prev, howToCheck: htmlContent }));
     };
 
-    // Handlers for dynamic multiple links
     const handleDynamicLinkChange = (index, field, value) => {
         const updatedLinks = [...formData.importantLinks.downloadAnswerKey];
         updatedLinks[index][field] = value;
@@ -136,7 +137,7 @@ const AdminAddAnswerKey = () => {
             ...formData,
             importantLinks: {
                 ...formData.importantLinks,
-                downloadAnswerKey: [...formData.importantLinks.downloadAnswerKey, { label: "Download Server 2", url: "" }]
+                downloadAnswerKey: [...formData.importantLinks.downloadAnswerKey, { label: "New Download Link", url: "" }]
             }
         });
     };
@@ -160,36 +161,59 @@ const AdminAddAnswerKey = () => {
         e.preventDefault();
         setStatusMessage(null);
 
-        // Basic validation
         if (!formData.title || !formData.conductedby) {
             setStatusMessage({ message: "Title and Conducted By are required fields.", severity: "error" });
             return;
         }
 
-        setLoading(true);
+        setSaving(true);
 
         try {
-            await axios.post("https://www.finderight.com/api/answer-keys", formData);
-            
-            setStatusMessage({ message: "Answer Key published successfully! Redirecting...", severity: "success" });
-            setFormData(initialState);
+            await axios.put(`https://www.finderight.com/api/answer-keys/${slug}`, formData);
+            setStatusMessage({ message: "Answer Key updated successfully! Redirecting...", severity: "success" });
             
             setTimeout(() => {
-                router.push("/admin/manage-answer-keys"); // Ensure this points to your manage list
+                router.push("/admin/manage-answer-keys"); // Adjust based on your routing
             }, 1000);
         } catch (err) {
-            console.error("❌ Failed to add answer key:", err);
+            console.error(err);
             const errorMessage = err.response?.data?.message || err.message || "Unknown error occurred.";
-            setStatusMessage({ message: `Failed to add answer key: ${errorMessage}`, severity: "error" });
-            setLoading(false);
+            setStatusMessage({ message: `Failed to update: ${errorMessage}`, severity: "error" });
+            setSaving(false);
         }
     };
 
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
+                <CircularProgress color="secondary" />
+            </Box>
+        );
+    }
+
+    if (!formData) {
+        return (
+            <Box sx={{ maxWidth: 600, mx: "auto", mt: 10 }}>
+                <Alert severity="error">{statusMessage?.message || "Data could not be loaded."}</Alert>
+                <Button sx={{ mt: 2 }} onClick={() => router.push("/admin/manage-answer-keys")}>Go Back</Button>
+            </Box>
+        );
+    }
+
     return (
         <Box sx={{ maxWidth: 1000, mx: "auto", p: { xs: 2, md: 4 } }}>
+            <Button 
+                startIcon={<ArrowBack />} 
+                onClick={() => router.push("/admin/manage-answer-keys")} 
+                sx={{ mb: 2 }}
+                color="secondary"
+            >
+                Back to Answer Keys
+            </Button>
+
             <Paper elevation={4} sx={{ p: { xs: 3, md: 5 }, borderRadius: 3, borderTop: '8px solid #9c27b0' }}>
                 <Typography variant="h4" gutterBottom align="center" sx={{ fontWeight: 700, color: '#7b1fa2', mb: 4 }}>
-                    Publish New Answer Key
+                    Edit Answer Key
                 </Typography>
 
                 {statusMessage && (
@@ -201,7 +225,6 @@ const AdminAddAnswerKey = () => {
                 <form onSubmit={handleSubmit} autoComplete="off">
                     <Grid container spacing={3}>
                         
-                        {/* --- Basic Info --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mb: 1, fontWeight: 'bold' }}>📋 Basic Information</Divider>
                         </Grid>
@@ -209,21 +232,16 @@ const AdminAddAnswerKey = () => {
                         <Grid item xs={12} md={6}>
                             <TextField
                                 fullWidth required label="Title (SEO Optimized)"
-                                name="title" value={formData.title} onChange={handleChange}
-                                placeholder="e.g., SSC CHSL Tier 1 Answer Key 2026"
-                                size="small"
+                                name="title" value={formData.title} onChange={handleChange} size="small"
                             />
                         </Grid>
                         <Grid item xs={12} md={6}>
                             <TextField
                                 fullWidth required label="Conducted By (Authority)"
-                                name="conductedby" value={formData.conductedby} onChange={handleChange}
-                                placeholder="e.g., Staff Selection Commission"
-                                size="small"
+                                name="conductedby" value={formData.conductedby} onChange={handleChange} size="small"
                             />
                         </Grid>
 
-                        {/* --- Timeline Dates --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Key Dates (Free Text)</Divider>
                         </Grid>
@@ -234,36 +252,27 @@ const AdminAddAnswerKey = () => {
                             { label: "Exam Date", name: "examDate" },
                             { label: "Admit Card Release", name: "admitcard" },
                             { label: "Answer Key Release", name: "answerKeyRelease" },
-                            { label: "Publish Date", name: "publishDate", placeholder: "e.g., 2026-05-15" },
-                        ].map(({ label, name, placeholder }) => (
+                            { label: "Publish Date", name: "publishDate" },
+                        ].map(({ label, name }) => (
                             <Grid item xs={12} sm={6} md={4} key={name}>
                                 <TextField
                                     fullWidth label={label} name={name}
-                                    value={formData[name] || ""} onChange={handleChange}
-                                    placeholder={placeholder || "e.g., TBA or 15 May 2026"}
-                                    size="small"
+                                    value={formData[name] || ""} onChange={handleChange} size="small"
                                 />
                             </Grid>
                         ))}
 
-                        {/* --- Rich Text Details --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📖 How to Check / Details</Divider>
-                            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                                Use the editor below to format steps, lists, and bold text.
-                            </Typography>
-                            
-                            {/* Render the custom TipTap Editor here */}
                             <TipTapEditor 
                                 content={formData.howToCheck} 
                                 onChange={handleTipTapChange} 
                             />
                         </Grid>
 
-                        {/* --- SEO Optimized Download Links --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold', color: '#9c27b0' }}>
-                                🔗 Multiple Download Links (SEO Optimized)
+                                🔗 Download Links
                             </Divider>
                         </Grid>
 
@@ -271,26 +280,18 @@ const AdminAddAnswerKey = () => {
                             <Grid container spacing={2} alignItems="center" key={index} sx={{ mb: 2, px: 3 }}>
                                 <Grid item xs={12} sm={5}>
                                     <TextField
-                                        fullWidth size="small"
-                                        label="Custom SEO Link Label"
-                                        value={link.label}
-                                        onChange={(e) => handleDynamicLinkChange(index, "label", e.target.value)}
+                                        fullWidth size="small" label="Label"
+                                        value={link.label} onChange={(e) => handleDynamicLinkChange(index, "label", e.target.value)}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
                                     <TextField
-                                        fullWidth size="small"
-                                        label="Direct URL"
-                                        value={link.url}
-                                        onChange={(e) => handleDynamicLinkChange(index, "url", e.target.value)}
+                                        fullWidth size="small" label="URL"
+                                        value={link.url} onChange={(e) => handleDynamicLinkChange(index, "url", e.target.value)}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={1}>
-                                    <IconButton 
-                                        color="error" 
-                                        onClick={() => removeDynamicLink(index)} 
-                                        disabled={formData.importantLinks.downloadAnswerKey.length === 1}
-                                    >
+                                    <IconButton color="error" onClick={() => removeDynamicLink(index)} disabled={formData.importantLinks.downloadAnswerKey.length === 1}>
                                         <RemoveCircleOutline />
                                     </IconButton>
                                 </Grid>
@@ -299,34 +300,25 @@ const AdminAddAnswerKey = () => {
 
                         <Grid item xs={12} sx={{ pl: 3 }}>
                             <Button startIcon={<AddCircleOutline />} onClick={addDynamicLink} variant="text" color="secondary">
-                                Add Another Download Server / Link
+                                Add Another Link
                             </Button>
                         </Grid>
 
-                        {/* --- Official Website --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>🌐 Official Website</Divider>
-                        </Grid>
-                        <Grid item xs={12}>
                             <TextField
-                                fullWidth size="small"
-                                label="Official Website URL"
-                                value={formData.importantLinks.officialWebsite}
-                                onChange={handleOfficialWebsiteChange}
+                                fullWidth size="small" label="Official Website URL"
+                                value={formData.importantLinks.officialWebsite || ""} onChange={handleOfficialWebsiteChange}
                             />
                         </Grid>
 
-                        {/* --- Submit Button --- */}
                         <Grid item xs={12} sx={{ textAlign: 'center', mt: 4 }}>
                             <Button 
-                                type="submit" 
-                                variant="contained" 
-                                color="secondary" // matches the purple header theme
-                                disabled={loading}
+                                type="submit" variant="contained" color="secondary" disabled={saving}
                                 sx={{ py: 1.5, px: 6, fontSize: '1.1rem', borderRadius: 8 }}
-                                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CheckCircleOutline />}
+                                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveOutlined />}
                             >
-                                {loading ? "Publishing..." : "Publish Answer Key"}
+                                {saving ? "Saving Changes..." : "Update Answer Key"}
                             </Button>
                         </Grid>
 
@@ -337,4 +329,4 @@ const AdminAddAnswerKey = () => {
     );
 };
 
-export default AdminAddAnswerKey;
+export default AdminEditAnswerKey;
