@@ -64,7 +64,8 @@ const AdminEditResult = () => {
 
                 setForm({
                     ...data,
-                    examDate: formatDate(data.examDate),
+                    // ✅ BYPASS formatDate for examDate since it is now free-text (e.g., "TBA")
+                    examDate: data.examDate || "", 
                     resultDate: formatDate(data.resultDate),
                     postDate: formatDate(data.postDate),
                     importantLinks: parsedLinks
@@ -120,10 +121,11 @@ const AdminEditResult = () => {
         try {
             await axios.put(`https://www.finderight.com/api/results/${slug}`, form);
             
-            setStatusMessage({ message: "Result updated successfully!", severity: "success" });
+            setStatusMessage({ message: "Result updated successfully! Redirecting...", severity: "success" });
             
+            // ✅ Consistent redirect path
             setTimeout(() => {
-                router.push("/admin/results");
+                router.push("/admin/manage-results");
             }, 1500);
 
         } catch (err) {
@@ -148,7 +150,7 @@ const AdminEditResult = () => {
         return (
             <Box sx={{ maxWidth: 600, mx: "auto", mt: 10 }}>
                 <Alert severity="error">{statusMessage?.message || "Data could not be loaded."}</Alert>
-                <Button sx={{ mt: 2 }} onClick={() => router.push("/admin/results")}>Go Back</Button>
+                <Button sx={{ mt: 2 }} onClick={() => router.push("/admin/manage-results")}>Go Back</Button>
             </Box>
         );
     }
@@ -198,11 +200,14 @@ const AdminEditResult = () => {
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Timeline Dates</Divider>
                         </Grid>
                         
+                        {/* ✅ CHANGED: Free text Exam Date to match the "Add Result" logic */}
                         <Grid item xs={12} sm={4}>
                             <TextField
-                                fullWidth required label="Exam Date" type="date"
+                                fullWidth required 
+                                label="Exam Date (Free Text)" 
+                                placeholder="e.g., 14 May 2026 or TBA"
                                 name="examDate" value={form.examDate} onChange={handleChange}
-                                InputLabelProps={{ shrink: true }} size="small"
+                                size="small"
                             />
                         </Grid>
                         <Grid item xs={12} sm={4}>

@@ -155,11 +155,14 @@ const AdminAddResult = () => {
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Timeline Dates</Divider>
                         </Grid>
                         
+                        {/* ✅ CHANGED: Removed type="date" to make it textable */}
                         <Grid item xs={12} sm={4}>
                             <TextField
-                                fullWidth required label="Exam Date" type="date"
+                                fullWidth required 
+                                label="Exam Date (Free Text)" 
+                                placeholder="e.g., 14 May 2026 or TBA"
                                 name="examDate" value={form.examDate} onChange={handleChange}
-                                InputLabelProps={{ shrink: true }} size="small"
+                                size="small"
                             />
                         </Grid>
                         <Grid item xs={12} sm={4}>
