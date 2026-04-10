@@ -37,29 +37,37 @@ const AdminEditResult = () => {
     const router = useRouter();
     const slug = params?.slug;
 
-    const [form, setForm] = useState(null); // Null while loading
+    const [form, setForm] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [statusMessage, setStatusMessage] = useState(null);
 
-    // Fetch existing data on mount
     useEffect(() => {
         const fetchResultData = async () => {
             try {
-                // Fetch the single result using the slug
                 const res = await axios.get(`https://www.finderight.com/api/results/${slug}`);
                 const data = res.data.result;
 
-                // Pre-fill the form, ensuring dates are formatted correctly
+                // 🚨 SAFEGUARD: Handle both OLD (Array) and NEW (Object) database schemas
+                let parsedLinks = { downloadResult: [], officialWebsite: "" };
+
+                if (data.importantLinks) {
+                    if (Array.isArray(data.importantLinks)) {
+                        // Old data found: Convert the flat array to the new 'downloadResult' format
+                        parsedLinks.downloadResult = data.importantLinks;
+                    } else {
+                        // New data found: Use it normally
+                        parsedLinks.downloadResult = data.importantLinks.downloadResult || [];
+                        parsedLinks.officialWebsite = data.importantLinks.officialWebsite || "";
+                    }
+                }
+
                 setForm({
                     ...data,
                     examDate: formatDate(data.examDate),
                     resultDate: formatDate(data.resultDate),
                     postDate: formatDate(data.postDate),
-                    importantLinks: data.importantLinks || {
-                        downloadResult: [],
-                        officialWebsite: ""
-                    }
+                    importantLinks: parsedLinks
                 });
             } catch (err) {
                 console.error(err);
@@ -110,12 +118,10 @@ const AdminEditResult = () => {
         setSaving(true);
 
         try {
-            // Send a PUT request to update the data
             await axios.put(`https://www.finderight.com/api/results/${slug}`, form);
             
             setStatusMessage({ message: "Result updated successfully!", severity: "success" });
             
-            // Optional: Redirect back to the results list after 1.5 seconds
             setTimeout(() => {
                 router.push("/admin/results");
             }, 1500);
@@ -137,10 +143,12 @@ const AdminEditResult = () => {
         );
     }
 
-    if (!form && statusMessage) {
+    // Safety fallback if the form is completely missing
+    if (!form) {
         return (
             <Box sx={{ maxWidth: 600, mx: "auto", mt: 10 }}>
-                <Alert severity="error">{statusMessage.message}</Alert>
+                <Alert severity="error">{statusMessage?.message || "Data could not be loaded."}</Alert>
+                <Button sx={{ mt: 2 }} onClick={() => router.push("/admin/results")}>Go Back</Button>
             </Box>
         );
     }
@@ -149,7 +157,7 @@ const AdminEditResult = () => {
         <Box sx={{ maxWidth: 1000, mx: "auto", p: { xs: 2, md: 4 } }}>
             <Button 
                 startIcon={<ArrowBack />} 
-                onClick={() => router.push("/admin/results")}
+                onClick={() => router.push("/admin/manage-results")}
                 sx={{ mb: 2 }}
             >
                 Back to Results
