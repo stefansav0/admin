@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
     TextField,
     Button,
@@ -16,37 +17,66 @@ import {
 import {
     AddCircleOutline,
     RemoveCircleOutline,
-    CheckCircleOutline
+    SaveOutlined,
+    ArrowBack
 } from "@mui/icons-material";
 import axios from "axios";
 
-const initialState = {
-    title: "",
-    conductedBy: "",
-    examDate: "",
-    resultDate: "",
-    postDate: "",
-    shortInfo: "",
-    howToCheck: "",
-    importantLinks: {
-        // Dynamic array for multiple SEO-friendly download links
-        downloadResult: [{ label: "Download Result", url: "" }],
-        officialWebsite: "",
-    },
+// Helper to safely format dates for HTML <input type="date">
+const formatDate = (dateString) => {
+    if (!dateString) return "";
+    try {
+        return new Date(dateString).toISOString().split("T")[0];
+    } catch {
+        return dateString;
+    }
 };
 
-const AdminAddResult = () => {
-    const [form, setForm] = useState(initialState);
-    const [loading, setLoading] = useState(false);
+const AdminEditResult = () => {
+    const params = useParams();
+    const router = useRouter();
+    const slug = params?.slug;
+
+    const [form, setForm] = useState(null); // Null while loading
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [statusMessage, setStatusMessage] = useState(null);
 
-    // Standard text fields
+    // Fetch existing data on mount
+    useEffect(() => {
+        const fetchResultData = async () => {
+            try {
+                // Fetch the single result using the slug
+                const res = await axios.get(`https://www.finderight.com/api/results/${slug}`);
+                const data = res.data.result;
+
+                // Pre-fill the form, ensuring dates are formatted correctly
+                setForm({
+                    ...data,
+                    examDate: formatDate(data.examDate),
+                    resultDate: formatDate(data.resultDate),
+                    postDate: formatDate(data.postDate),
+                    importantLinks: data.importantLinks || {
+                        downloadResult: [],
+                        officialWebsite: ""
+                    }
+                });
+            } catch (err) {
+                console.error(err);
+                setStatusMessage({ message: "Failed to load result data. It may have been deleted.", severity: "error" });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (slug) fetchResultData();
+    }, [slug]);
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setForm({ ...form, [name]: value });
     };
 
-    // Handlers for dynamic multiple links
     const handleDynamicLinkChange = (index, field, value) => {
         const updatedLinks = [...form.importantLinks.downloadResult];
         updatedLinks[index][field] = value;
@@ -61,7 +91,7 @@ const AdminAddResult = () => {
             ...form,
             importantLinks: {
                 ...form.importantLinks,
-                downloadResult: [...form.importantLinks.downloadResult, { label: "Download Result Server 2", url: "" }]
+                downloadResult: [...form.importantLinks.downloadResult, { label: "New Download Link", url: "" }]
             }
         });
     };
@@ -74,49 +104,60 @@ const AdminAddResult = () => {
         });
     };
 
-    // Official website handler
-    const handleOfficialWebsiteChange = (e) => {
-        setForm({
-            ...form,
-            importantLinks: { ...form.importantLinks, officialWebsite: e.target.value }
-        });
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         setStatusMessage(null);
-
-        // Basic Validation
-        if (
-            !form.title || !form.conductedBy || !form.examDate ||
-            !form.resultDate || !form.postDate || !form.shortInfo || !form.howToCheck
-        ) {
-            setStatusMessage({ message: "Please fill in all required fields.", severity: "error" });
-            return;
-        }
-
-        setLoading(true);
+        setSaving(true);
 
         try {
-            // Send exactly to your specified backend API
-            await axios.post("https://www.finderight.com/api/results", form);
+            // Send a PUT request to update the data
+            await axios.put(`https://www.finderight.com/api/results/${slug}`, form);
             
-            setStatusMessage({ message: "Result published successfully!", severity: "success" });
-            setForm(initialState); // Reset form on success
+            setStatusMessage({ message: "Result updated successfully!", severity: "success" });
+            
+            // Optional: Redirect back to the results list after 1.5 seconds
+            setTimeout(() => {
+                router.push("/admin/results");
+            }, 1500);
+
         } catch (err) {
             console.error(err);
             const errorMessage = err.response?.data?.message || err.message || "Unknown error occurred.";
-            setStatusMessage({ message: `Failed to add result: ${errorMessage}`, severity: "error" });
+            setStatusMessage({ message: `Failed to update: ${errorMessage}`, severity: "error" });
         } finally {
-            setLoading(false);
+            setSaving(false);
         }
     };
 
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (!form && statusMessage) {
+        return (
+            <Box sx={{ maxWidth: 600, mx: "auto", mt: 10 }}>
+                <Alert severity="error">{statusMessage.message}</Alert>
+            </Box>
+        );
+    }
+
     return (
         <Box sx={{ maxWidth: 1000, mx: "auto", p: { xs: 2, md: 4 } }}>
-            <Paper elevation={4} sx={{ p: { xs: 3, md: 5 }, borderRadius: 3, borderTop: '8px solid #4caf50' }}>
-                <Typography variant="h4" gutterBottom align="center" sx={{ fontWeight: 700, color: '#2e7d32', mb: 4 }}>
-                    Publish New Result
+            <Button 
+                startIcon={<ArrowBack />} 
+                onClick={() => router.push("/admin/results")}
+                sx={{ mb: 2 }}
+            >
+                Back to Results
+            </Button>
+
+            <Paper elevation={4} sx={{ p: { xs: 3, md: 5 }, borderRadius: 3, borderTop: '8px solid #ff9800' }}>
+                <Typography variant="h4" gutterBottom align="center" sx={{ fontWeight: 700, color: '#e65100', mb: 4 }}>
+                    Edit Result
                 </Typography>
 
                 {statusMessage && (
@@ -128,29 +169,23 @@ const AdminAddResult = () => {
                 <form onSubmit={handleSubmit} autoComplete="off">
                     <Grid container spacing={3}>
                         
-                        {/* --- Basic Info --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mb: 1, fontWeight: 'bold' }}>📋 Result Information</Divider>
                         </Grid>
 
                         <Grid item xs={12} md={6}>
                             <TextField
-                                fullWidth required label="Result Title (SEO Optimized)"
-                                name="title" value={form.title} onChange={handleChange}
-                                placeholder="e.g., UPSC Civil Services Final Result 2026"
-                                size="small"
+                                fullWidth required label="Result Title"
+                                name="title" value={form.title} onChange={handleChange} size="small"
                             />
                         </Grid>
                         <Grid item xs={12} md={6}>
                             <TextField
-                                fullWidth required label="Conducted By (Authority)"
-                                name="conductedBy" value={form.conductedBy} onChange={handleChange}
-                                placeholder="e.g., Union Public Service Commission"
-                                size="small"
+                                fullWidth required label="Conducted By"
+                                name="conductedBy" value={form.conductedBy} onChange={handleChange} size="small"
                             />
                         </Grid>
 
-                        {/* --- Timeline Dates --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Timeline Dates</Divider>
                         </Grid>
@@ -164,20 +199,19 @@ const AdminAddResult = () => {
                         </Grid>
                         <Grid item xs={12} sm={4}>
                             <TextField
-                                fullWidth required label="Result Declaration Date" type="date"
+                                fullWidth required label="Result Date" type="date"
                                 name="resultDate" value={form.resultDate} onChange={handleChange}
                                 InputLabelProps={{ shrink: true }} size="small"
                             />
                         </Grid>
                         <Grid item xs={12} sm={4}>
                             <TextField
-                                fullWidth required label="Post Published Date" type="date"
+                                fullWidth required label="Post Date" type="date"
                                 name="postDate" value={form.postDate} onChange={handleChange}
                                 InputLabelProps={{ shrink: true }} size="small"
                             />
                         </Grid>
 
-                        {/* --- Details --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📄 Detailed Information</Divider>
                         </Grid>
@@ -185,52 +219,38 @@ const AdminAddResult = () => {
                         <Grid item xs={12}>
                             <TextField
                                 fullWidth required multiline rows={3}
-                                label="Short Notice / Info (Supports HTML)"
-                                name="shortInfo" value={form.shortInfo} onChange={handleChange}
+                                label="Short Notice" name="shortInfo" value={form.shortInfo} onChange={handleChange}
                             />
                         </Grid>
                         <Grid item xs={12}>
                             <TextField
                                 fullWidth required multiline rows={3}
-                                label="How to Check Result (Step-by-step Guide)"
-                                name="howToCheck" value={form.howToCheck} onChange={handleChange}
+                                label="How to Check" name="howToCheck" value={form.howToCheck} onChange={handleChange}
                             />
                         </Grid>
 
-                        {/* --- SEO Optimized Download Links --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold', color: '#1976d2' }}>
-                                🔗 Multiple Download Links (SEO Optimized)
+                                🔗 Download Links
                             </Divider>
-                            <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-                                Use descriptive labels (e.g., "Download Final Merit List PDF") to improve Google search rankings.
-                            </Typography>
                         </Grid>
 
                         {form.importantLinks.downloadResult.map((link, index) => (
                             <Grid container spacing={2} alignItems="center" key={index} sx={{ mb: 2, px: 3 }}>
                                 <Grid item xs={12} sm={5}>
                                     <TextField
-                                        fullWidth size="small"
-                                        label="Custom SEO Link Label"
-                                        value={link.label}
-                                        onChange={(e) => handleDynamicLinkChange(index, "label", e.target.value)}
+                                        fullWidth size="small" label="Label"
+                                        value={link.label} onChange={(e) => handleDynamicLinkChange(index, "label", e.target.value)}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
                                     <TextField
-                                        fullWidth size="small"
-                                        label="Direct URL"
-                                        value={link.url}
-                                        onChange={(e) => handleDynamicLinkChange(index, "url", e.target.value)}
+                                        fullWidth size="small" label="URL"
+                                        value={link.url} onChange={(e) => handleDynamicLinkChange(index, "url", e.target.value)}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={1}>
-                                    <IconButton 
-                                        color="error" 
-                                        onClick={() => removeDynamicLink(index)} 
-                                        disabled={form.importantLinks.downloadResult.length === 1}
-                                    >
+                                    <IconButton color="error" onClick={() => removeDynamicLink(index)} disabled={form.importantLinks.downloadResult.length === 0}>
                                         <RemoveCircleOutline />
                                     </IconButton>
                                 </Grid>
@@ -238,35 +258,27 @@ const AdminAddResult = () => {
                         ))}
 
                         <Grid item xs={12} sx={{ pl: 3 }}>
-                            <Button startIcon={<AddCircleOutline />} onClick={addDynamicLink} variant="text" color="primary">
-                                Add Another Download Server / Link
+                            <Button startIcon={<AddCircleOutline />} onClick={addDynamicLink} variant="text">
+                                Add Another Link
                             </Button>
                         </Grid>
 
-                        {/* --- Official Website --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>🌐 Official Website</Divider>
-                        </Grid>
-                        <Grid item xs={12}>
                             <TextField
-                                fullWidth size="small"
-                                label="Official Website URL"
-                                value={form.importantLinks.officialWebsite}
-                                onChange={handleOfficialWebsiteChange}
+                                fullWidth size="small" label="Official Website URL"
+                                value={form.importantLinks.officialWebsite || ""}
+                                onChange={(e) => setForm({...form, importantLinks: {...form.importantLinks, officialWebsite: e.target.value}})}
                             />
                         </Grid>
 
-                        {/* --- Submit Button --- */}
                         <Grid item xs={12} sx={{ textAlign: 'center', mt: 4 }}>
                             <Button 
-                                type="submit" 
-                                variant="contained" 
-                                color="success" 
-                                disabled={loading}
+                                type="submit" variant="contained" color="warning" disabled={saving}
                                 sx={{ py: 1.5, px: 6, fontSize: '1.1rem', borderRadius: 8 }}
-                                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CheckCircleOutline />}
+                                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveOutlined />}
                             >
-                                {loading ? "Publishing Result..." : "Publish Result"}
+                                {saving ? "Saving Changes..." : "Save Changes"}
                             </Button>
                         </Grid>
 
@@ -277,4 +289,4 @@ const AdminAddResult = () => {
     );
 };
 
-export default AdminAddResult;
+export default AdminEditResult;

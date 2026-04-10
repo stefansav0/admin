@@ -4,8 +4,10 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 
 // Define the structure of a Result object
+// ✅ Added 'slug' to the type
 type Result = {
     _id: string;
+    slug: string; 
     title: string;
     examName: string;
     publishedOn: string;
@@ -36,16 +38,19 @@ const AdminResults = () => {
         }
     };
 
-    const handleDelete = async (id: string) => {
+    // ✅ Changed parameter from 'id' to 'slug'
+    const handleDelete = async (slug: string) => {
         if (!window.confirm("Are you sure you want to delete this result?")) return;
 
         try {
-            const res = await fetch(`https://www.finderight.com/api/results/${id}`, {
+            // ✅ Send the slug in the URL instead of the ID
+            const res = await fetch(`https://www.finderight.com/api/results/${slug}`, {
                 method: "DELETE",
             });
             if (res.ok) {
                 alert("✅ Result deleted successfully");
-                setResults((prev) => prev.filter((item) => item._id !== id));
+                // ✅ Filter out the deleted item using its slug
+                setResults((prev) => prev.filter((item) => item.slug !== slug));
             } else {
                 alert("❌ Failed to delete result");
             }
@@ -90,13 +95,15 @@ const AdminResults = () => {
                             </div>
                             <div className="flex gap-2">
                                 <Link
-                                    href={`/admin/edit-result/${result._id}`}
+                                    // You can change this to result.slug as well if your edit route expects a slug
+                                    href={`/admin/edit-result/${result.slug}`} 
                                     className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm"
                                 >
                                     ✏️ Edit
                                 </Link>
                                 <button
-                                    onClick={() => handleDelete(result._id)}
+                                    // ✅ Pass the slug here instead of _id
+                                    onClick={() => handleDelete(result.slug)}
                                     className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
                                 >
                                     🗑️ Delete
