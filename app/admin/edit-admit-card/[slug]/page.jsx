@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
     TextField,
     Button,
@@ -17,53 +18,34 @@ import {
     AddCircleOutline,
     RemoveCircleOutline,
     SaveOutlined,
-    CheckCircleOutline,
     ArrowBack
 } from "@mui/icons-material";
 import axios from "axios";
-import { useRouter } from "next/navigation";
 
-const initialState = {
-    title: "",
-    conductedby: "",
-    examDate: "",
-    applicationBegin: "",
-    lastDateApply: "",
-    admitCard: "",
-    publishDate: "",
-    description: "",
-    howToDownload: "",
-    importantLinks: {
-        // Dynamic array for multiple SEO-friendly admit card links
-        downloadAdmitCard: [{ label: "Download Admit Card", url: "" }],
-        officialWebsite: "",
-    },
-};
-
-const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
-    const [formData, setFormData] = useState(initialState);
-    const [loading, setLoading] = useState(false);
-    const [fetching, setFetching] = useState(isEdit);
-    const [statusMessage, setStatusMessage] = useState(null);
+const AdminEditAdmitCard = () => {
+    const params = useParams();
     const router = useRouter();
+    const slug = params?.slug;
+
+    const [formData, setFormData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [statusMessage, setStatusMessage] = useState(null);
 
     useEffect(() => {
-        if (!isEdit) return;
-
         const fetchAdmitCardData = async () => {
             try {
                 const res = await axios.get(`https://www.finderight.com/api/admit-cards/${slug}`);
-                const data = res.data.result || res.data; // Adjust based on your API wrapper
+                // Safely extract the data depending on how your API wraps the response
+                const data = res.data.admitCard || res.data; 
 
                 // 🚨 SAFEGUARD: Handle both OLD (String) and NEW (Array) database schemas
                 let parsedLinks = { downloadAdmitCard: [{ label: "Download Admit Card", url: "" }], officialWebsite: "" };
 
                 if (data.importantLinks) {
                     if (Array.isArray(data.importantLinks.downloadAdmitCard)) {
-                        // New schema (Array of objects)
                         parsedLinks.downloadAdmitCard = data.importantLinks.downloadAdmitCard;
                     } else if (typeof data.importantLinks.downloadAdmitCard === 'string' && data.importantLinks.downloadAdmitCard) {
-                        // Old schema (Flat string) - Convert it safely
                         parsedLinks.downloadAdmitCard = [{ label: "Download Admit Card", url: data.importantLinks.downloadAdmitCard }];
                     }
                     parsedLinks.officialWebsite = data.importantLinks.officialWebsite || "";
@@ -75,21 +57,20 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
                 });
             } catch (err) {
                 console.error(err);
-                setStatusMessage({ message: "Failed to fetch admit card data.", severity: "error" });
+                setStatusMessage({ message: "Failed to load admit card data. It may have been deleted.", severity: "error" });
             } finally {
-                setFetching(false);
+                setLoading(false);
             }
         };
 
-        fetchAdmitCardData();
-    }, [slug, isEdit]);
+        if (slug) fetchAdmitCardData();
+    }, [slug]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    // Handlers for dynamic multiple links
     const handleDynamicLinkChange = (index, field, value) => {
         const updatedLinks = [...formData.importantLinks.downloadAdmitCard];
         updatedLinks[index][field] = value;
@@ -104,7 +85,7 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
             ...formData,
             importantLinks: {
                 ...formData.importantLinks,
-                downloadAdmitCard: [...formData.importantLinks.downloadAdmitCard, { label: "Download Server 2", url: "" }]
+                downloadAdmitCard: [...formData.importantLinks.downloadAdmitCard, { label: "New Download Link", url: "" }]
             }
         });
     };
@@ -128,35 +109,29 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
         e.preventDefault();
         setStatusMessage(null);
 
-        // Basic Validation
         if (!formData.title || !formData.conductedby) {
             setStatusMessage({ message: "Title and Conducted By are required fields.", severity: "error" });
             return;
         }
 
-        setLoading(true);
+        setSaving(true);
 
         try {
-            if (isEdit) {
-                await axios.put(`https://www.finderight.com/api/admit-cards/${slug}`, formData);
-                setStatusMessage({ message: "Admit Card updated successfully! Redirecting...", severity: "success" });
-            } else {
-                await axios.post("https://www.finderight.com/api/admit-cards", formData);
-                setStatusMessage({ message: "Admit Card created successfully! Redirecting...", severity: "success" });
-            }
+            await axios.put(`https://www.finderight.com/api/admit-cards/${slug}`, formData);
+            setStatusMessage({ message: "Admit Card updated successfully! Redirecting...", severity: "success" });
             
             setTimeout(() => {
-                router.push("/admin/admit-cards"); // Adjust this route to wherever your list view is
+                router.push("/admin/admit-cards"); // Or wherever your manage page is located
             }, 1000);
         } catch (err) {
             console.error(err);
             const errorMessage = err.response?.data?.message || err.message || "Unknown error occurred.";
-            setStatusMessage({ message: `Failed to save: ${errorMessage}`, severity: "error" });
-            setLoading(false);
+            setStatusMessage({ message: `Failed to update: ${errorMessage}`, severity: "error" });
+            setSaving(false);
         }
     };
 
-    if (fetching) {
+    if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
                 <CircularProgress />
@@ -164,21 +139,28 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
         );
     }
 
+    if (!formData) {
+        return (
+            <Box sx={{ maxWidth: 600, mx: "auto", mt: 10 }}>
+                <Alert severity="error">{statusMessage?.message || "Data could not be loaded."}</Alert>
+                <Button sx={{ mt: 2 }} onClick={() => router.push("/admin/admit-cards")}>Go Back</Button>
+            </Box>
+        );
+    }
+
     return (
         <Box sx={{ maxWidth: 1000, mx: "auto", p: { xs: 2, md: 4 } }}>
-            {isEdit && (
-                <Button 
-                    startIcon={<ArrowBack />} 
-                    onClick={() => router.push("/admin/admit-cards")} // Adjust based on your routing
-                    sx={{ mb: 2 }}
-                >
-                    Back to Admit Cards
-                </Button>
-            )}
+            <Button 
+                startIcon={<ArrowBack />} 
+                onClick={() => router.push("/admin/admit-cards")} 
+                sx={{ mb: 2 }}
+            >
+                Back to Admit Cards
+            </Button>
 
             <Paper elevation={4} sx={{ p: { xs: 3, md: 5 }, borderRadius: 3, borderTop: '8px solid #1976d2' }}>
                 <Typography variant="h4" gutterBottom align="center" sx={{ fontWeight: 700, color: '#1565c0', mb: 4 }}>
-                    {isEdit ? "Edit Admit Card" : "Publish New Admit Card"}
+                    Edit Admit Card
                 </Typography>
 
                 {statusMessage && (
@@ -190,7 +172,6 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
                 <form onSubmit={handleSubmit} autoComplete="off">
                     <Grid container spacing={3}>
                         
-                        {/* --- Basic Info --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mb: 1, fontWeight: 'bold' }}>📋 Admit Card Information</Divider>
                         </Grid>
@@ -198,21 +179,16 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
                         <Grid item xs={12} md={6}>
                             <TextField
                                 fullWidth required label="Title (SEO Optimized)"
-                                name="title" value={formData.title} onChange={handleChange}
-                                placeholder="e.g., SSC CGL Tier 1 Admit Card 2026"
-                                size="small"
+                                name="title" value={formData.title} onChange={handleChange} size="small"
                             />
                         </Grid>
                         <Grid item xs={12} md={6}>
                             <TextField
                                 fullWidth required label="Conducted By (Authority)"
-                                name="conductedby" value={formData.conductedby} onChange={handleChange}
-                                placeholder="e.g., Staff Selection Commission"
-                                size="small"
+                                name="conductedby" value={formData.conductedby} onChange={handleChange} size="small"
                             />
                         </Grid>
 
-                        {/* --- Timeline Dates --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Key Dates (Free Text or Format)</Divider>
                         </Grid>
@@ -220,21 +196,18 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
                         {[
                             { label: "Application Begin", name: "applicationBegin" },
                             { label: "Last Date to Apply", name: "lastDateApply" },
-                            { label: "Exam Date", name: "examDate", placeholder: "e.g., 15 May 2026 or TBA" },
+                            { label: "Exam Date", name: "examDate" },
                             { label: "Admit Card Release", name: "admitCard" },
                             { label: "Publish Date", name: "publishDate" },
-                        ].map(({ label, name, placeholder }) => (
+                        ].map(({ label, name }) => (
                             <Grid item xs={12} sm={6} md={4} key={name}>
                                 <TextField
                                     fullWidth label={label} name={name}
-                                    value={formData[name] || ""} onChange={handleChange}
-                                    placeholder={placeholder || "e.g., 10-04-2026"}
-                                    size="small"
+                                    value={formData[name] || ""} onChange={handleChange} size="small"
                                 />
                             </Grid>
                         ))}
 
-                        {/* --- Details --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📄 Detailed Information</Divider>
                         </Grid>
@@ -242,22 +215,21 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
                         <Grid item xs={12}>
                             <TextField
                                 fullWidth multiline rows={3}
-                                label="Description / Short Notice (Supports HTML)"
+                                label="Description / Short Notice"
                                 name="description" value={formData.description || ""} onChange={handleChange}
                             />
                         </Grid>
                         <Grid item xs={12}>
                             <TextField
                                 fullWidth multiline rows={3}
-                                label="How to Download Admit Card (Step-by-step)"
+                                label="How to Download Admit Card"
                                 name="howToDownload" value={formData.howToDownload || ""} onChange={handleChange}
                             />
                         </Grid>
 
-                        {/* --- SEO Optimized Download Links --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold', color: '#1976d2' }}>
-                                🔗 Multiple Download Links (SEO Optimized)
+                                🔗 Download Links
                             </Divider>
                         </Grid>
 
@@ -265,26 +237,18 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
                             <Grid container spacing={2} alignItems="center" key={index} sx={{ mb: 2, px: 3 }}>
                                 <Grid item xs={12} sm={5}>
                                     <TextField
-                                        fullWidth size="small"
-                                        label="Custom SEO Link Label"
-                                        value={link.label}
-                                        onChange={(e) => handleDynamicLinkChange(index, "label", e.target.value)}
+                                        fullWidth size="small" label="Label"
+                                        value={link.label} onChange={(e) => handleDynamicLinkChange(index, "label", e.target.value)}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
                                     <TextField
-                                        fullWidth size="small"
-                                        label="Direct URL"
-                                        value={link.url}
-                                        onChange={(e) => handleDynamicLinkChange(index, "url", e.target.value)}
+                                        fullWidth size="small" label="URL"
+                                        value={link.url} onChange={(e) => handleDynamicLinkChange(index, "url", e.target.value)}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={1}>
-                                    <IconButton 
-                                        color="error" 
-                                        onClick={() => removeDynamicLink(index)} 
-                                        disabled={formData.importantLinks.downloadAdmitCard.length === 1}
-                                    >
+                                    <IconButton color="error" onClick={() => removeDynamicLink(index)} disabled={formData.importantLinks.downloadAdmitCard.length === 1}>
                                         <RemoveCircleOutline />
                                     </IconButton>
                                 </Grid>
@@ -293,34 +257,25 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
 
                         <Grid item xs={12} sx={{ pl: 3 }}>
                             <Button startIcon={<AddCircleOutline />} onClick={addDynamicLink} variant="text" color="primary">
-                                Add Another Download Server / Link
+                                Add Another Link
                             </Button>
                         </Grid>
 
-                        {/* --- Official Website --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>🌐 Official Website</Divider>
-                        </Grid>
-                        <Grid item xs={12}>
                             <TextField
-                                fullWidth size="small"
-                                label="Official Website URL"
-                                value={formData.importantLinks.officialWebsite}
-                                onChange={handleOfficialWebsiteChange}
+                                fullWidth size="small" label="Official Website URL"
+                                value={formData.importantLinks.officialWebsite || ""} onChange={handleOfficialWebsiteChange}
                             />
                         </Grid>
 
-                        {/* --- Submit Button --- */}
                         <Grid item xs={12} sx={{ textAlign: 'center', mt: 4 }}>
                             <Button 
-                                type="submit" 
-                                variant="contained" 
-                                color={isEdit ? "warning" : "primary"}
-                                disabled={loading}
+                                type="submit" variant="contained" color="warning" disabled={saving}
                                 sx={{ py: 1.5, px: 6, fontSize: '1.1rem', borderRadius: 8 }}
-                                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : (isEdit ? <SaveOutlined /> : <CheckCircleOutline />)}
+                                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveOutlined />}
                             >
-                                {loading ? "Saving..." : (isEdit ? "Update Admit Card" : "Publish Admit Card")}
+                                {saving ? "Saving Changes..." : "Update Admit Card"}
                             </Button>
                         </Grid>
 
@@ -331,4 +286,4 @@ const AdminAddAdmitCardForm = ({ isEdit, slug }) => {
     );
 };
 
-export default AdminAddAdmitCardForm;
+export default AdminEditAdmitCard;
