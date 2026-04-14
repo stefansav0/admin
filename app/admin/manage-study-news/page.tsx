@@ -3,8 +3,10 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 
+// Added 'slug' to the type definition
 type StudyNews = {
     _id: string;
+    slug: string; 
     title: string;
     source: string;
     publishedOn: string;
@@ -35,16 +37,17 @@ const AdminStudyNews = () => {
         }
     };
 
-
-    const handleDelete = async (id: string) => {
+    // Updated handleDelete to accept and use slug
+    const handleDelete = async (slug: string) => {
         if (!window.confirm("Delete this news item?")) return;
         try {
-            const res = await fetch(`https://www.finderight.com/api/study-news/${id}`, {
+            const res = await fetch(`https://www.finderight.com/api/study-news/${slug}`, {
                 method: "DELETE",
             });
             if (res.ok) {
                 alert("✅ News deleted");
-                setNewsList((prev) => prev.filter((item) => item._id !== id));
+                // Filter out the deleted item using its slug
+                setNewsList((prev) => prev.filter((item) => item.slug !== slug));
             } else {
                 alert("❌ Failed to delete");
             }
@@ -110,7 +113,8 @@ const AdminStudyNews = () => {
                                     ✏️ Edit
                                 </Link>
                                 <button
-                                    onClick={() => handleDelete(item._id)}
+                                    // Pass the slug instead of _id
+                                    onClick={() => handleDelete(item.slug)}
                                     className="bg-red-600 text-white px-3 py-1 rounded"
                                 >
                                     🗑️ Delete
