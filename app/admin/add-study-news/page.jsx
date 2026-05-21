@@ -9,27 +9,15 @@ import {
     Grid,
     Box,
     Paper,
-    MenuItem,
-    Divider,
+    IconButton,
 } from "@mui/material";
-
-import TipTapEditor from "../../../components/TipTapEditor";
+// Using a generic close icon for removing the image (optional but good for UX)
+import TipTapEditor from "../../../components/TipTapEditor"; // adjust path as needed
 
 const initialState = {
     title: "",
-    slug: "",
-    author: "",
-    visibility: "draft",
-
     description: "",
-
-    coverImage: "",
-    imageUrl: "",
-
-    metaDescription: "",
-    keywords: "",
-
-    seoTitle: "",
+    coverImage: "", // ✅ Added cover image field
 };
 
 export default function AdminAddStudyNews() {
@@ -38,111 +26,72 @@ export default function AdminAddStudyNews() {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-
-        // Auto generate slug from title
-        if (name === "title") {
-            const generatedSlug = value
-                .toLowerCase()
-                .replace(/[^a-z0-9\s-]/g, "")
-                .replace(/\s+/g, "-");
-
-            setNews((prev) => ({
-                ...prev,
-                title: value,
-                slug: generatedSlug,
-            }));
-        } else {
-            setNews((prev) => ({
-                ...prev,
-                [name]: value,
-            }));
-        }
+        setNews((prev) => ({ ...prev, [name]: value }));
     };
 
-    // Image Upload
+    // ✅ Handle Image Upload (Converts file to Base64 String)
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
-
         if (!file) return;
 
+        // Basic validation
         if (!file.type.startsWith("image/")) {
-            alert("Please upload a valid image.");
+            alert("Please upload a valid image file.");
             return;
         }
 
+        // Convert image to base64 to store in DB as a string
         const reader = new FileReader();
-
         reader.readAsDataURL(file);
-
         reader.onload = () => {
-            setNews((prev) => ({
-                ...prev,
-                coverImage: reader.result,
-            }));
+            setNews((prev) => ({ ...prev, coverImage: reader.result }));
         };
-
-        reader.onerror = () => {
-            alert("Failed to upload image");
+        reader.onerror = (error) => {
+            console.error("Error converting image:", error);
+            alert("Failed to process image");
         };
     };
 
+    // ✅ Remove the uploaded image
     const handleRemoveImage = () => {
-        setNews((prev) => ({
-            ...prev,
-            coverImage: "",
-        }));
+        setNews((prev) => ({ ...prev, coverImage: "" }));
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
         if (!news.title || !news.description) {
-            alert("Please fill required fields");
+            alert("Please fill in all required fields.");
             return;
         }
-
+        
         setIsUploading(true);
-
         try {
-            await axios.post(
-                "https://www.finderight.com/api/study-news",
-                news
-            );
-
-            alert("✅ Study news published successfully!");
-
+            await axios.post("https://www.finderight.com/api/study-news", news);
+            alert("✅ Study news posted successfully!");
             setNews(initialState);
         } catch (error) {
-            console.error(error);
-            alert("❌ Failed to publish news");
+            console.error("Error submitting study news:", error);
+            alert("❌ Failed to submit news");
         } finally {
             setIsUploading(false);
         }
     };
 
     return (
-        <Box sx={{ maxWidth: 1000, mx: "auto", mt: 4 }}>
+        <Box sx={{ maxWidth: 900, mx: "auto", mt: 4 }}>
             <Paper sx={{ p: 4 }}>
-                <Typography
-                    variant="h5"
-                    sx={{
-                        color: "#2563EB",
-                        fontWeight: 700,
-                        mb: 4,
-                    }}
-                >
+                <Typography variant="h5" sx={{ color: "#2563EB", fontWeight: 600, mb: 4 }}>
                     Add Study News
                 </Typography>
 
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
-
-                        {/* TITLE */}
+                        
+                        {/* Title Field */}
                         <Grid item xs={12}>
-                            <Typography variant="subtitle1">
-                                Title *
+                            <Typography variant="subtitle1" gutterBottom>
+                                Title <span style={{ color: "#DC2626" }}>*</span>
                             </Typography>
-
                             <TextField
                                 fullWidth
                                 name="title"
@@ -153,213 +102,90 @@ export default function AdminAddStudyNews() {
                             />
                         </Grid>
 
-                        {/* SLUG */}
-                        <Grid item xs={12} md={6}>
-                            <Typography variant="subtitle1">
-                                Slug
-                            </Typography>
-
-                            <TextField
-                                fullWidth
-                                name="slug"
-                                placeholder="seo-friendly-url"
-                                value={news.slug}
-                                onChange={handleChange}
-                            />
-                        </Grid>
-
-                        {/* AUTHOR */}
-                        <Grid item xs={12} md={6}>
-                            <Typography variant="subtitle1">
-                                Author Name *
-                            </Typography>
-
-                            <TextField
-                                fullWidth
-                                name="author"
-                                placeholder="Your Name"
-                                value={news.author}
-                                onChange={handleChange}
-                            />
-                        </Grid>
-
-                        {/* VISIBILITY */}
-                        <Grid item xs={12} md={6}>
-                            <Typography variant="subtitle1">
-                                Visibility Status
-                            </Typography>
-
-                            <TextField
-                                select
-                                fullWidth
-                                name="visibility"
-                                value={news.visibility}
-                                onChange={handleChange}
-                            >
-                                <MenuItem value="draft">
-                                    Draft (Hidden from Public)
-                                </MenuItem>
-
-                                <MenuItem value="published">
-                                    Published
-                                </MenuItem>
-                            </TextField>
-                        </Grid>
-
-                        {/* SEO TITLE */}
-                        <Grid item xs={12} md={6}>
-                            <Typography variant="subtitle1">
-                                SEO Title
-                            </Typography>
-
-                            <TextField
-                                fullWidth
-                                name="seoTitle"
-                                placeholder="SEO optimized title"
-                                value={news.seoTitle}
-                                onChange={handleChange}
-                            />
-                        </Grid>
-
+                        {/* Cover Image Field */}
                         <Grid item xs={12}>
-                            <Divider sx={{ my: 1 }}>
-                                SEO & Discovery
-                            </Divider>
-                        </Grid>
-
-                        {/* META DESCRIPTION */}
-                        <Grid item xs={12}>
-                            <Typography variant="subtitle1">
-                                Meta Description
-                            </Typography>
-
-                            <TextField
-                                fullWidth
-                                multiline
-                                rows={3}
-                                name="metaDescription"
-                                placeholder="Write SEO meta description for Google search"
-                                value={news.metaDescription}
-                                onChange={handleChange}
-                            />
-                        </Grid>
-
-                        {/* KEYWORDS */}
-                        <Grid item xs={12}>
-                            <Typography variant="subtitle1">
-                                Keywords for Organic SEO
-                            </Typography>
-
-                            <TextField
-                                fullWidth
-                                name="keywords"
-                                placeholder="study news, exam update, government jobs, result 2026"
-                                value={news.keywords}
-                                onChange={handleChange}
-                            />
-                        </Grid>
-
-                        <Grid item xs={12}>
-                            <Divider sx={{ my: 1 }}>
+                            <Typography variant="subtitle1" gutterBottom>
                                 Cover Image
-                            </Divider>
-                        </Grid>
-
-                        {/* IMAGE URL */}
-                        <Grid item xs={12}>
-                            <Typography variant="subtitle1">
-                                Image URL
                             </Typography>
-
-                            <TextField
-                                fullWidth
-                                name="imageUrl"
-                                placeholder="https://example.com/image.jpg"
-                                value={news.imageUrl}
-                                onChange={handleChange}
-                            />
-                        </Grid>
-
-                        {/* IMAGE UPLOAD */}
-                        <Grid item xs={12}>
-                            <Button
-                                variant="outlined"
-                                component="label"
-                            >
-                                Upload Image
-
-                                <input
-                                    hidden
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleImageUpload}
-                                />
-                            </Button>
-
-                            {(news.coverImage || news.imageUrl) && (
-                                <Box sx={{ mt: 2 }}>
-                                    <img
-                                        src={
-                                            news.coverImage ||
-                                            news.imageUrl
-                                        }
-                                        alt="Preview"
-                                        style={{
-                                            width: "100%",
-                                            maxHeight: "300px",
-                                            objectFit: "cover",
-                                            borderRadius: "10px",
-                                        }}
+                            
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start" }}>
+                                <Button
+                                    variant="outlined"
+                                    component="label"
+                                    sx={{ textTransform: "none" }}
+                                >
+                                    Upload Image
+                                    {/* Hidden file input */}
+                                    <input
+                                        type="file"
+                                        hidden
+                                        accept="image/*"
+                                        onChange={handleImageUpload}
                                     />
+                                </Button>
 
-                                    {news.coverImage && (
-                                        <Button
-                                            color="error"
-                                            sx={{ mt: 1 }}
+                                {/* Image Preview */}
+                                {news.coverImage && (
+                                    <Box sx={{ position: "relative", mt: 1 }}>
+                                        <Box
+                                            component="img"
+                                            src={news.coverImage}
+                                            alt="Cover Preview"
+                                            sx={{
+                                                maxHeight: 250,
+                                                maxWidth: "100%",
+                                                borderRadius: 2,
+                                                border: "1px solid #E5E7EB",
+                                                objectFit: "cover",
+                                            }}
+                                        />
+                                        <Button 
+                                            variant="contained" 
+                                            color="error" 
+                                            size="small"
                                             onClick={handleRemoveImage}
+                                            sx={{ position: "absolute", top: 8, right: 8, minWidth: "auto", px: 1.5 }}
                                         >
                                             Remove
                                         </Button>
-                                    )}
-                                </Box>
-                            )}
+                                    </Box>
+                                )}
+                            </Box>
                         </Grid>
 
-                        {/* DESCRIPTION */}
+                        {/* Rich Description Field */}
                         <Grid item xs={12}>
-                            <Typography variant="subtitle1">
-                                Description *
+                            <Typography variant="subtitle1" gutterBottom>
+                                Description <span style={{ color: "#DC2626" }}>*</span>
                             </Typography>
-
                             <TipTapEditor
                                 content={news.description}
                                 onChange={(value) =>
-                                    setNews((prev) => ({
-                                        ...prev,
-                                        description: value,
-                                    }))
+                                    setNews((prev) => ({ ...prev, description: value }))
                                 }
                             />
+                            <Typography
+                                variant="caption"
+                                display="block"
+                                sx={{ mt: 1, fontSize: 12, color: "#4B5563" }}
+                            >
+                                You can paste images or use HTML-friendly formatting.
+                            </Typography>
                         </Grid>
 
-                        {/* SUBMIT */}
+                        {/* Submit Button */}
                         <Grid item xs={12}>
                             <Button
                                 type="submit"
                                 variant="contained"
+                                color="primary"
                                 disabled={isUploading}
-                                sx={{
-                                    px: 5,
-                                    py: 1.5,
-                                    fontWeight: 600,
-                                }}
+                                sx={{ px: 4, py: 1.5 }}
                             >
-                                {isUploading
-                                    ? "Publishing..."
-                                    : "Publish News"}
+                                {isUploading ? "Publishing..." : "Publish News"}
                             </Button>
                         </Grid>
-
+                        
                     </Grid>
                 </form>
             </Paper>

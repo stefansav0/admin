@@ -107,7 +107,7 @@ const AdminStudyNews = () => {
                             </div>
                             <div className="flex gap-2">
                                 <Link
-                                    href={`/admin/edit-study-news/${item.slug}`}
+                                    href={`https://www.finderight.com/admin/edit-studynews/${item._id}`}
                                     className="bg-yellow-500 text-white px-3 py-1 rounded"
                                 >
                                     ✏️ Edit
