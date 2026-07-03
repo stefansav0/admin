@@ -79,7 +79,7 @@ const AdminStudyNews = () => {
                 <h1 className="text-2xl font-bold">Manage Study News</h1>
                 <Link
                     href="/admin/add-study-news"
-                    className="bg-green-600 text-white px-4 py-2 rounded shadow"
+                    className="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 transition"
                 >
                     ➕ Add News
                 </Link>
@@ -96,26 +96,26 @@ const AdminStudyNews = () => {
                     {newsList.map((item) => (
                         <div
                             key={item._id}
-                            className="p-4 border rounded shadow flex justify-between bg-white"
+                            className="p-4 border rounded shadow flex justify-between bg-white items-center"
                         >
                             <div>
-                                <h2 className="font-bold text-blue-600">{item.title}</h2>
-                                <p>{item.source}</p>
-                                <p className="text-sm text-gray-500">
+                                <h2 className="font-bold text-blue-600 text-lg">{item.title}</h2>
+                                {item.source && <p className="text-sm text-gray-700">{item.source}</p>}
+                                <p className="text-sm text-gray-500 mt-1">
                                     Published: {formatDate(item.publishedOn)}
                                 </p>
                             </div>
                             <div className="flex gap-2">
+                                {/* Updated to use relative path and slug for Next.js routing */}
                                 <Link
-                                    href={`https://www.finderight.com/admin/edit-studynews/${item._id}`}
-                                    className="bg-yellow-500 text-white px-3 py-1 rounded"
+                                    href={`/admin/edit-study-news/${item.slug}`}
+                                    className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition flex items-center gap-1"
                                 >
                                     ✏️ Edit
                                 </Link>
                                 <button
-                                    // Pass the slug instead of _id
                                     onClick={() => handleDelete(item.slug)}
-                                    className="bg-red-600 text-white px-3 py-1 rounded"
+                                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 transition flex items-center gap-1"
                                 >
                                     🗑️ Delete
                                 </button>

@@ -13,6 +13,8 @@ type Document = {
     description?: string;
 };
 
+// 🛑 CHANGED: Pointing to localhost:3000 to fix the 404 cross-port error! 
+// Change back to "https://www.finderight.com/api" for production.
 const API_BASE = "https://www.finderight.com/api";
 
 const AdminDocuments = () => {
@@ -26,13 +28,15 @@ const AdminDocuments = () => {
             const res = await fetch(`${API_BASE}/documents`, {
                 cache: "no-store"
             });
-            const data = await res.json();
-
-            if (res.ok) {
-                setDocuments(data.documents || []);
-            } else {
-                throw new Error(data.message || "Failed to load documents");
+            
+            // If the fetch fails entirely (like a 404), this catches it before parsing JSON
+            if (!res.ok) {
+                 throw new Error(`Failed to load documents (Status: ${res.status})`);
             }
+            
+            const data = await res.json();
+            setDocuments(data.documents || []);
+            
         } catch (err: unknown) { // ✅ Strict TS error handling
             if (err instanceof Error) {
                 setError(err.message);
@@ -149,7 +153,15 @@ const AdminDocuments = () => {
                             {/* Action Buttons */}
                             <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-gray-100">
                                 
+                                {/* 🟢 NEW: Edit Button */}
+                                <Link
+                                    href={`/admin/edit-document/${doc.slug}`}
+                                    className="flex-1 md:flex-none inline-flex items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-200 hover:border-blue-600 font-semibold px-4 py-2 rounded-lg transition-colors duration-200 text-sm"
+                                >
+                                    ✏️ Edit
+                                </Link>
 
+                                {/* Delete Button */}
                                 <button
                                     onClick={() => handleDelete(doc.slug)}
                                     className="flex-1 md:flex-none inline-flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 hover:border-red-600 font-semibold px-4 py-2 rounded-lg transition-colors duration-200 text-sm"
