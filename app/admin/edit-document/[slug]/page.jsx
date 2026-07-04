@@ -423,8 +423,41 @@ const AdminEditDocument = () => {
                                                 Nothing to preview yet. Switch to "Editor" to start typing.
                                             </Typography>
                                         ) : formData.contentFormat === 'html' ? (
-                                            <div dangerouslySetInnerHTML={{ __html: formData.fullDescription }} />
-                                        ) : (
+    <Box 
+        dangerouslySetInnerHTML={{ __html: formData.fullDescription }} 
+        sx={{
+            // Add default margins to headings
+            '& h1, & h2, & h3, & h4, & h5, & h6': { 
+                mt: 3, 
+                mb: 2, 
+                fontWeight: 'bold',
+                color: '#1e293b'
+            },
+            '& h1': { fontSize: '2rem' },
+            '& h2': { fontSize: '1.5rem' },
+            '& h3': { fontSize: '1.25rem' },
+            // Add spacing to paragraphs
+            '& p': { 
+                mb: 2, 
+                lineHeight: 1.7,
+                color: '#334155'
+            },
+            // Add spacing to lists
+            '& ul, & ol': { 
+                pl: 4, 
+                mb: 2 
+            },
+            '& li': { 
+                mb: 1 
+            },
+            // Handle links
+            '& a': {
+                color: '#2563eb',
+                textDecoration: 'underline'
+            }
+        }}
+    />
+) : (
                                             <Typography sx={{ whiteSpace: 'pre-wrap', color: '#334155' }}>
                                                 {formData.fullDescription}
                                             </Typography>
