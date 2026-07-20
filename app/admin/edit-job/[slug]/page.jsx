@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { useParams, useRouter } from "next/navigation";
 import {
     TextField,
     Button,
@@ -21,6 +22,7 @@ import {
     AddCircleOutline,
     RemoveCircleOutline,
     CloudUpload,
+    ArrowBack
 } from "@mui/icons-material";
 
 const initialState = {
@@ -31,13 +33,11 @@ const initialState = {
     lastDate: "",
     seoKeywords: "",
     metaDescription: "",
-    // HTML Supported Fields
     description: "",
     ageLimit: "",
     eligibility: "",
     applicationFee: "",
     vacancy: "",
-    // Object Fields
     importantDates: {
         applicationBegin: "",
         lastDateApply: "",
@@ -52,13 +52,88 @@ const initialState = {
     },
 };
 
-export default function AddJob() {
+export default function EditJobDynamic() {
+    const params = useParams();
+    const router = useRouter();
+    
+    // Automatically extracts the slug from the URL (e.g., 'army-jag-online-form-2026')
+    const currentSlug = params?.slug; 
+
     const [jobData, setJobData] = useState(initialState);
     const [auth, setAuth] = useState(false);
     const [secret, setSecret] = useState("");
+    
+    const [isFetching, setIsFetching] = useState(false);
     const [loading, setLoading] = useState(false);
     const [authError, setAuthError] = useState(null);
     const [statusMessage, setStatusMessage] = useState(null);
+
+    // Auto-fetch data once authenticated
+    useEffect(() => {
+        if (auth && currentSlug) {
+            fetchJobData(currentSlug);
+        }
+    }, [auth, currentSlug]);
+
+    const handleAuth = () => {
+        if (secret === "mychudail") {
+            setAuth(true);
+            setAuthError(null);
+        } else {
+            setAuthError("Incorrect secret key. Access denied.");
+        }
+    };
+
+    const fetchJobData = async (slugToFetch) => {
+        setIsFetching(true);
+        setStatusMessage(null);
+        
+        try {
+            const res = await axios.get(`https://www.finderight.com/api/jobs/${slugToFetch}`);
+            const data = res.data;
+
+            const safeParseJSON = (val, fallback) => {
+                if (!val) return fallback;
+                if (typeof val === "string") {
+                    try { return JSON.parse(val); } catch (e) { return fallback; }
+                }
+                return val;
+            };
+
+            setJobData({
+                title: data.title || "",
+                slug: data.slug || "",
+                department: data.department || "",
+                category: data.category || "",
+                lastDate: data.lastDate || "",
+                seoKeywords: data.seoKeywords || "",
+                metaDescription: data.metaDescription || "",
+                description: data.description || "",
+                ageLimit: data.ageLimit || "",
+                eligibility: data.eligibility || "",
+                applicationFee: data.applicationFee || "",
+                vacancy: data.vacancy || "",
+                importantDates: safeParseJSON(data.importantDates, initialState.importantDates),
+                importantLinks: {
+                    applyOnline: safeParseJSON(data.importantLinks?.applyOnline, initialState.importantLinks.applyOnline),
+                    downloadNotification: safeParseJSON(data.importantLinks?.downloadNotification, initialState.importantLinks.downloadNotification).map(item => ({
+                        ...item,
+                        file: null,
+                        fileName: ""
+                    })),
+                    officialWebsite: data.importantLinks?.officialWebsite || "",
+                }
+            });
+        } catch (err) {
+            console.error(err);
+            setStatusMessage({ 
+                message: "Job not found in the database. Please check the URL.", 
+                severity: "error" 
+            });
+        } finally {
+            setIsFetching(false);
+        }
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -114,15 +189,6 @@ export default function AddJob() {
         }));
     };
 
-    const handleAuth = () => {
-        if (secret === "mychudail") {
-            setAuth(true);
-            setAuthError(null);
-        } else {
-            setAuthError("Incorrect secret key. Access denied.");
-        }
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -131,7 +197,6 @@ export default function AddJob() {
         try {
             const formData = new FormData();
 
-            // 1. Append standard flat fields
             const textFields = [
                 "title", "slug", "department", "category", "lastDate", 
                 "seoKeywords", "metaDescription", "description", 
@@ -141,16 +206,10 @@ export default function AddJob() {
                 formData.append(field, jobData[field].trim());
             });
 
-            // 2. Append Important Dates (as JSON string)
             formData.append("importantDates", JSON.stringify(jobData.importantDates));
-
-            // 3. Append Official Website
             formData.append("officialWebsite", jobData.importantLinks.officialWebsite.trim());
-
-            // 4. Append Dynamic Apply Links (as JSON string)
             formData.append("applyOnline", JSON.stringify(jobData.importantLinks.applyOnline));
 
-            // 5. Append Notification Links & Files
             const notificationData = [];
             jobData.importantLinks.downloadNotification.forEach((item, index) => {
                 if (item.file) {
@@ -163,31 +222,38 @@ export default function AddJob() {
             });
             formData.append("downloadNotification", JSON.stringify(notificationData));
 
-            const res = await axios.post(
-                "https://www.finderight.com/api/jobs",
+            // Use the original slug from the URL to perform the update
+            const res = await axios.put(
+                `/api/jobs/${currentSlug}`,
                 formData
             );
 
-            setStatusMessage({ message: "Job added successfully!", severity: "success" });
-            setJobData(initialState);
+            setStatusMessage({ message: "Job updated successfully!", severity: "success" });
+            
+            // If the user changed the slug manually in the form, redirect them to the new URL
+            if (jobData.slug !== currentSlug) {
+                setTimeout(() => {
+                    router.push(`/admin/edit-job/${jobData.slug}`);
+                }, 1500);
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err) {
             console.error("❌ Error:", err);
-            
             if (err.response?.status === 413) {
                 setStatusMessage({ 
-                    message: "Upload Failed: Your PDF is too large. Vercel limits uploads to 4.5MB. Please compress your file.", 
+                    message: "Upload Failed: Your PDF is too large. Vercel limits uploads to 4.5MB.", 
                     severity: "error" 
                 });
             } else {
                 const errorMessage = err.response?.data?.message || err.message || "Unknown error";
-                setStatusMessage({ message: `Failed to add job: ${errorMessage}`, severity: "error" });
+                setStatusMessage({ message: `Failed to update job: ${errorMessage}`, severity: "error" });
             }
         } finally {
             setLoading(false);
         }
     };
 
-    // Configuration for HTML supported fields
     const htmlFields = [
         { name: "description", label: "Comprehensive Job Description", color: "#9c27b0" },
         { name: "ageLimit", label: "Age Limit Details", color: "#e91e63" },
@@ -205,7 +271,7 @@ export default function AddJob() {
                         Admin Access Required
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
-                        Please enter the secret administrative key to unlock the job submission form.
+                        Enter the secret key to edit <strong>{currentSlug}</strong>
                     </Typography>
 
                     {authError && (
@@ -237,15 +303,30 @@ export default function AddJob() {
         );
     }
 
+    if (isFetching) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', flexDirection: 'column' }}>
+                <CircularProgress size={60} color="warning" />
+                <Typography variant="h6" sx={{ mt: 2, color: 'text.secondary' }}>Fetching Job Details...</Typography>
+            </Box>
+        );
+    }
+
     return (
         <Box sx={{ maxWidth: 1200, mx: "auto", p: { xs: 2, md: 4 } }}>
-            <Paper elevation={4} sx={{ p: { xs: 3, md: 5 }, borderRadius: 3, borderTop: '8px solid #00acc1' }}>
-                <Typography variant="h4" gutterBottom align="center" sx={{ fontWeight: 700, color: '#00acc1', mb: 4 }}>
-                    Job Post Administration
-                </Typography>
-                <Typography variant="subtitle1" gutterBottom align="center" sx={{ color: 'text.secondary', mb: 4 }}>
-                    Use this form to add new job recruitment details, important dates, and links.
-                </Typography>
+            <Paper elevation={4} sx={{ p: { xs: 3, md: 5 }, borderRadius: 3, borderTop: '8px solid #ff9800' }}>
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', position: 'relative', mb: 4 }}>
+                    <IconButton 
+                        onClick={() => router.push('/admin/dashboard')} // Fallback route
+                        sx={{ position: 'absolute', left: 0 }}
+                    >
+                        <ArrowBack />
+                    </IconButton>
+                    <Typography variant="h4" align="center" sx={{ width: '100%', fontWeight: 700, color: '#f57c00' }}>
+                        Edit Job Post
+                    </Typography>
+                </Box>
 
                 {statusMessage && (
                     <Alert severity={statusMessage.severity} onClose={() => setStatusMessage(null)} sx={{ mb: 3 }}>
@@ -303,7 +384,6 @@ export default function AddJob() {
                                 onChange={handleChange}
                                 variant="outlined"
                                 size="small"
-                                placeholder="e.g., SSC CGL, govt jobs 2024, staff selection commission"
                             />
                         </Grid>
 
@@ -324,11 +404,10 @@ export default function AddJob() {
                             />
                         </Grid>
 
-                        {/* HTML Supported Fields Section */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 4, mb: 1, fontWeight: 'bold' }}>✍️ Rich Text & HTML Content</Divider>
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                Type your content below. You can use standard text or HTML tags like <code>&lt;b&gt;</code>, <code>&lt;br&gt;</code>, <code>&lt;ul&gt;</code> for formatting. A live preview is generated on the right.
+                                You can use standard text or HTML tags like <code>&lt;b&gt;</code>, <code>&lt;br&gt;</code>, <code>&lt;ul&gt;</code>. A live preview is generated on the right.
                             </Typography>
                         </Grid>
 
@@ -349,7 +428,6 @@ export default function AddJob() {
                                         value={jobData[field.name]}
                                         onChange={handleChange}
                                         variant="outlined"
-                                        placeholder={`Enter ${field.label.toLowerCase()} here...`}
                                     />
                                 </Grid>
                                 <Grid item xs={12} md={6}>
@@ -469,7 +547,7 @@ export default function AddJob() {
                                             color={item.file ? "success" : "primary"}
                                             sx={{ height: '40px' }}
                                         >
-                                            {item.fileName || "Upload PDF File"}
+                                            {item.fileName || "Upload New PDF File"}
                                             <input
                                                 type="file"
                                                 hidden
@@ -507,12 +585,12 @@ export default function AddJob() {
                             <Button
                                 type="submit"
                                 variant="contained"
-                                color="primary"
+                                color="warning" 
                                 disabled={loading}
                                 sx={{ py: 1.5, px: 6, fontSize: '1.1rem', borderRadius: 8 }}
                                 startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
                             >
-                                {loading ? "Submitting..." : "Publish New Job Post"}
+                                {loading ? "Updating..." : "Update Job Post"}
                             </Button>
                         </Grid>
                     </Grid>

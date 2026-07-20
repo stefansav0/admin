@@ -51,6 +51,11 @@ const AdminDashboard = () => {
             route: "/admin/add-document", manage: "/admin/manage-documents", 
             icon: "📄", theme: "slate" 
         },
+        {
+            label: "Question Papers", desc: "Upload and manage previous year question papers.",
+            route: "/admin/manage-paper/create", manage: "/admin/manage-paper",
+            icon: "📚", theme: "blue"
+        }
     ];
 
     // Helper to apply dynamic Tailwind colors based on the theme
