@@ -55,7 +55,7 @@ export default function CreatePaper() {
     setIsLoading(true);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/papers`, {
+      const res = await fetch(`https://www.finderight.com/api/papers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

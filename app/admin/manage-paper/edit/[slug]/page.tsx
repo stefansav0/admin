@@ -23,7 +23,7 @@ export default function EditPaper() {
   // Fetch the existing paper data on load
   useEffect(() => {
     setIsFetching(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/papers/${params.slug}`)
+    fetch(`https://www.finderight.com/api/papers/${params.slug}`)
       .then((res) => res.json())
       .then((data) => {
         setFormData({
@@ -82,7 +82,7 @@ export default function EditPaper() {
 
     try {
       // Use PUT request and the ORIGINAL slug from the URL to update the document
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/papers/${params.slug}`, {
+      const res = await fetch(`https://www.finderight.com/api/papers/${params.slug}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
