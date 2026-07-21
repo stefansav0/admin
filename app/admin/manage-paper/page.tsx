@@ -19,29 +19,11 @@ export default function AdminDashboard() {
   const fetchPapers = async () => {
     try {
       setIsLoading(true);
-      
-      // Fallback added in case the environment variable is missing in production
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-      const res = await fetch(`${baseUrl}/papers`);
-      
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      
+      const res = await fetch(`https://www.finderight.com/api/papers`);
       const data = await res.json();
-      
-      // Robust check to handle if API returns an array directly OR an object like { papers: [...] }
-      if (Array.isArray(data)) {
-        setPapers(data);
-      } else if (data && data.papers && Array.isArray(data.papers)) {
-        setPapers(data.papers);
-      } else {
-        setPapers([]); 
-      }
-      
+      setPapers(data);
     } catch (error) {
       console.error("Failed to fetch papers:", error);
-      setPapers([]); // Ensure it doesn't crash on error
     } finally {
       setIsLoading(false);
     }
@@ -56,8 +38,7 @@ export default function AdminDashboard() {
     if (!confirm(`WARNING: Are you sure you want to permanently delete "${title}"?`)) return;
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-      const res = await fetch(`${baseUrl}/papers/${slug}`, {
+      const res = await fetch(`https://www.finderight.com/api/papers/${slug}`, {
         method: "DELETE",
       });
       
@@ -153,8 +134,7 @@ export default function AdminDashboard() {
 
                     {/* Actions Column */}
                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                      {/* 🔥 FIX: Removed hover opacity classes so buttons are always visible */}
-                      <div className="flex items-center justify-end gap-2 transition-opacity">
+                      <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         
                         {/* Edit Button */}
                         <Link 
