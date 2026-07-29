@@ -24,19 +24,20 @@ import TipTapEditor from "../../../components/TipTapEditor";
 
 const initialState = {
     title: "",
+    slug: "",
+    seoKeywords: "",
+    metaDescription: "",
     conductedBy: "",
     eligibility: "",
     ageLimit: "",
     course: "",
     applicationFee: "",
     fullCourseDetails: "",
-    examDate: "",
-    publishDate: "",
-    applicationBegin: "",
-    lastDateApply: "",
-    admissionDate: "",
+    keyDates: [
+        { label: "Application Begin", date: "" },
+        { label: "Last Date to Apply", date: "" },
+    ],
     importantLinks: {
-        // ✅ Converted to dynamic arrays for multiple links
         applyOnline: [{ label: "Apply Online", url: "" }],
         downloadNotice: [{ label: "Download Notice", url: "" }],
         officialWebsite: "",
@@ -54,39 +55,72 @@ const AdminAddAdmission = () => {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
+    // Handle Rich Text Editor Changes
+    const handleEditorChange = (name, value) => {
+        setFormData((prev) => ({ ...prev, [name]: value }));
+    };
+
+    // --- Dynamic Key Dates Handlers ---
+    const handleKeyDateChange = (index, field, value) => {
+        setFormData((prev) => {
+            const updatedDates = [...(prev.keyDates || [])];
+            updatedDates[index][field] = value;
+            return { ...prev, keyDates: updatedDates };
+        });
+    };
+
+    const addKeyDate = () => {
+        setFormData((prev) => ({
+            ...prev,
+            keyDates: [...(prev.keyDates || []), { label: "", date: "" }]
+        }));
+    };
+
+    const removeKeyDate = (index) => {
+        setFormData((prev) => {
+            const updatedDates = (prev.keyDates || []).filter((_, i) => i !== index);
+            return { ...prev, keyDates: updatedDates };
+        });
+    };
+
     // --- Dynamic Link Handlers ---
     const handleDynamicLinkChange = (type, index, field, value) => {
-        const updatedLinks = [...formData.importantLinks[type]];
-        updatedLinks[index][field] = value;
-        setFormData({
-            ...formData,
-            importantLinks: { ...formData.importantLinks, [type]: updatedLinks }
+        setFormData((prev) => {
+            const updatedLinks = [...(prev.importantLinks[type] || [])];
+            updatedLinks[index][field] = value;
+            return {
+                ...prev,
+                importantLinks: { ...prev.importantLinks, [type]: updatedLinks }
+            };
         });
     };
 
     const addDynamicLink = (type, defaultLabel) => {
-        setFormData({
-            ...formData,
+        setFormData((prev) => ({
+            ...prev,
             importantLinks: {
-                ...formData.importantLinks,
-                [type]: [...formData.importantLinks[type], { label: defaultLabel, url: "" }]
+                ...prev.importantLinks,
+                [type]: [...(prev.importantLinks[type] || []), { label: defaultLabel, url: "" }]
             }
-        });
+        }));
     };
 
     const removeDynamicLink = (type, index) => {
-        const updatedLinks = formData.importantLinks[type].filter((_, i) => i !== index);
-        setFormData({
-            ...formData,
-            importantLinks: { ...formData.importantLinks, [type]: updatedLinks }
+        setFormData((prev) => {
+            const updatedLinks = (prev.importantLinks[type] || []).filter((_, i) => i !== index);
+            return {
+                ...prev,
+                importantLinks: { ...prev.importantLinks, [type]: updatedLinks }
+            };
         });
     };
 
     const handleOfficialWebsiteChange = (e) => {
-        setFormData({
-            ...formData,
-            importantLinks: { ...formData.importantLinks, officialWebsite: e.target.value }
-        });
+        const { value } = e.target;
+        setFormData((prev) => ({
+            ...prev,
+            importantLinks: { ...prev.importantLinks, officialWebsite: value }
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -109,7 +143,7 @@ const AdminAddAdmission = () => {
             setFormData(initialState);
             
             setTimeout(() => {
-                router.push("/admin/manage-admissions"); // Adjust to your actual manage route
+                router.push("/admin/manage-admissions"); 
             }, 1000);
         } catch (err) {
             console.error("❌ Failed to add admission:", err);
@@ -119,8 +153,27 @@ const AdminAddAdmission = () => {
         }
     };
 
+    // ✅ HELPER: Decodes escaped HTML from TipTap so it renders properly in the Live Preview
+    const renderPreview = (htmlString) => {
+        if (!htmlString || htmlString === "<p></p>") {
+            return '<span style="color: #9e9e9e;">Start typing to preview...</span>';
+        }
+        
+        return htmlString
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, "&");
+    };
+
+    // Safe fallback arrays for rendering
+    const safeKeyDates = formData.keyDates || [];
+    const safeApplyLinks = formData.importantLinks?.applyOnline || [];
+    const safeNoticeLinks = formData.importantLinks?.downloadNotice || [];
+
     return (
-        <Box sx={{ maxWidth: 1000, mx: "auto", p: { xs: 2, md: 4 } }}>
+        <Box sx={{ maxWidth: 1200, mx: "auto", p: { xs: 2, md: 4 } }}>
             <Paper elevation={4} sx={{ p: { xs: 3, md: 5 }, borderRadius: 3, borderTop: '8px solid #00796b' }}>
                 <Typography variant="h4" gutterBottom align="center" sx={{ fontWeight: 700, color: '#004d40', mb: 4 }}>
                     Publish New Admission
@@ -142,7 +195,7 @@ const AdminAddAdmission = () => {
 
                         <Grid item xs={12} md={6}>
                             <TextField
-                                fullWidth required label="Title (SEO Optimized)"
+                                fullWidth required label="Title"
                                 name="title" value={formData.title} onChange={handleChange} size="small"
                                 placeholder="e.g., Delhi University UG Admission 2026"
                             />
@@ -155,53 +208,123 @@ const AdminAddAdmission = () => {
                             />
                         </Grid>
 
-                        {[
-                            { label: "Eligibility", name: "eligibility", placeholder: "e.g., 10+2 Passed" },
-                            { label: "Age Limit", name: "ageLimit", placeholder: "e.g., Minimum 17 Years" },
-                            { label: "Course (e.g. MA, MSc)", name: "course", placeholder: "e.g., BA, BSc, BCom" },
-                        ].map(({ label, name, placeholder }) => (
-                            <Grid item xs={12} sm={4} key={name}>
-                                <TextField
-                                    fullWidth label={label} name={name}
-                                    value={formData[name] || ""} onChange={handleChange}
-                                    placeholder={placeholder} size="small"
-                                />
-                            </Grid>
-                        ))}
-
-                        {/* --- Timeline Dates --- */}
+                        {/* --- SEO & Meta Information --- */}
                         <Grid item xs={12}>
-                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Key Dates (Free Text)</Divider>
+                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>🔍 SEO & Meta Settings</Divider>
+                        </Grid>
+
+                        <Grid item xs={12} md={6}>
+                            <TextField
+                                fullWidth label="Manual Slug"
+                                name="slug" value={formData.slug} onChange={handleChange} size="small"
+                                placeholder="e.g., delhi-university-ug-admission-2026"
+                                helperText="Leave blank to auto-generate from title"
+                            />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <TextField
+                                fullWidth label="SEO Keywords"
+                                name="seoKeywords" value={formData.seoKeywords} onChange={handleChange} size="small"
+                                placeholder="e.g., DU admission, Delhi university form, UG admission 2026"
+                            />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField
+                                fullWidth label="Meta Description"
+                                name="metaDescription" value={formData.metaDescription} onChange={handleChange}
+                                multiline rows={2} size="small"
+                                placeholder="Write a brief description for search engines..."
+                            />
+                        </Grid>
+
+                        {/* --- Dynamic Key Dates --- */}
+                        <Grid item xs={12}>
+                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Key Dates (Customizable)</Divider>
+                        </Grid>
+
+                        <Grid item xs={12}>
+                            {safeKeyDates.map((item, index) => (
+                                <Grid container spacing={2} alignItems="center" key={`date-${index}`} sx={{ mb: 2, px: 2 }}>
+                                    <Grid item xs={12} sm={5}>
+                                        <TextField 
+                                            fullWidth size="small" label="Event Label" 
+                                            value={item.label} 
+                                            onChange={(e) => handleKeyDateChange(index, "label", e.target.value)} 
+                                            placeholder="e.g., Exam Date, Admit Card Available"
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={6}>
+                                        <TextField 
+                                            fullWidth size="small" label="Date (Free Text)" 
+                                            value={item.date} 
+                                            onChange={(e) => handleKeyDateChange(index, "date", e.target.value)} 
+                                            placeholder="e.g., 15 May 2026 or To Be Notified"
+                                        />
+                                    </Grid>
+                                    <Grid item xs={12} sm={1}>
+                                        <IconButton color="error" onClick={() => removeKeyDate(index)} disabled={safeKeyDates.length === 1}>
+                                            <RemoveCircleOutline />
+                                        </IconButton>
+                                    </Grid>
+                                </Grid>
+                            ))}
+                            <Button startIcon={<AddCircleOutline />} onClick={addKeyDate} variant="text" sx={{ ml: 2 }}>
+                                Add Another Date
+                            </Button>
+                        </Grid>
+
+                        {/* --- Rich Text Details (With Live Preview) --- */}
+                        <Grid item xs={12}>
+                            <Divider sx={{ mt: 3, mb: 1, fontWeight: 'bold' }}>📝 Detailed HTML Supported Information</Divider>
                         </Grid>
 
                         {[
-                            { label: "Application Begin", name: "applicationBegin" },
-                            { label: "Last Date to Apply", name: "lastDateApply" },
-                            { label: "Exam Date", name: "examDate" },
-                            { label: "Admission Date", name: "admissionDate" },
-                            { label: "Publish Date", name: "publishDate" },
+                            { label: "Eligibility Criteria", name: "eligibility" },
+                            { label: "Age Limit Details", name: "ageLimit" },
+                            { label: "Course Information (e.g. MA, MSc)", name: "course" },
                         ].map(({ label, name }) => (
-                            <Grid item xs={12} sm={6} md={4} key={name}>
-                                <TextField
-                                    fullWidth label={label} name={name}
-                                    value={formData[name] || ""} onChange={handleChange} size="small"
-                                    placeholder="e.g., 15 May 2026"
-                                />
-                            </Grid>
+                            <React.Fragment key={name}>
+                                <Grid item xs={12}>
+                                    <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
+                                        {label}
+                                    </Typography>
+                                </Grid>
+                                <Grid item xs={12} md={6}>
+                                    <TipTapEditor
+                                        content={formData[name]}
+                                        onChange={(value) => handleEditorChange(name, value)}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} md={6}>
+                                    <Box sx={{ 
+                                        p: 2, 
+                                        height: '100%', 
+                                        minHeight: '150px', 
+                                        border: '1px dashed #b0bec5', 
+                                        borderRadius: 2, 
+                                        backgroundColor: '#f9fbe7',
+                                        overflowY: 'auto'
+                                    }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#757575', mb: 1, display: 'block' }}>
+                                            Live Preview:
+                                        </Typography>
+                                        {/* ✅ Comment is now outside the component props */}
+                                        <Box 
+                                            className="preview-content"
+                                            dangerouslySetInnerHTML={{ __html: renderPreview(formData[name]) }} 
+                                        />
+                                    </Box>
+                                </Grid>
+                            </React.Fragment>
                         ))}
 
-                        {/* --- Rich Text Details --- */}
                         <Grid item xs={12}>
-                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📝 Detailed Information</Divider>
-                        </Grid>
-
-                        <Grid item xs={12}>
-                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                            <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mt: 2 }}>
                                 Application Fee Structure
                             </Typography>
                             <TipTapEditor
                                 content={formData.applicationFee}
-                                onChange={(value) => setFormData((prev) => ({ ...prev, applicationFee: value }))}
+                                onChange={(value) => handleEditorChange("applicationFee", value)}
                             />
                         </Grid>
 
@@ -211,21 +334,21 @@ const AdminAddAdmission = () => {
                             </Typography>
                             <TipTapEditor
                                 content={formData.fullCourseDetails}
-                                onChange={(value) => setFormData((prev) => ({ ...prev, fullCourseDetails: value }))}
+                                onChange={(value) => handleEditorChange("fullCourseDetails", value)}
                             />
                         </Grid>
 
                         {/* --- Important Links --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 3, mb: 1, fontWeight: 'bold', color: '#00796b' }}>
-                                🔗 Important Links (SEO Optimized)
+                                🔗 Important Links
                             </Divider>
                         </Grid>
 
                         {/* Apply Online Dynamic Links */}
                         <Grid item xs={12}>
                             <Typography variant="subtitle2" color="primary" sx={{ mb: 1 }}>Apply Online Links</Typography>
-                            {formData.importantLinks.applyOnline.map((link, index) => (
+                            {safeApplyLinks.map((link, index) => (
                                 <Grid container spacing={2} alignItems="center" key={`apply-${index}`} sx={{ mb: 2, px: 2 }}>
                                     <Grid item xs={12} sm={5}>
                                         <TextField fullWidth size="small" label="Label" value={link.label} onChange={(e) => handleDynamicLinkChange("applyOnline", index, "label", e.target.value)} />
@@ -234,7 +357,7 @@ const AdminAddAdmission = () => {
                                         <TextField fullWidth size="small" label="URL" value={link.url} onChange={(e) => handleDynamicLinkChange("applyOnline", index, "url", e.target.value)} />
                                     </Grid>
                                     <Grid item xs={12} sm={1}>
-                                        <IconButton color="error" onClick={() => removeDynamicLink("applyOnline", index)} disabled={formData.importantLinks.applyOnline.length === 1}>
+                                        <IconButton color="error" onClick={() => removeDynamicLink("applyOnline", index)} disabled={safeApplyLinks.length === 1}>
                                             <RemoveCircleOutline />
                                         </IconButton>
                                     </Grid>
@@ -246,7 +369,7 @@ const AdminAddAdmission = () => {
                         {/* Download Notice Dynamic Links */}
                         <Grid item xs={12} sx={{ mt: 2 }}>
                             <Typography variant="subtitle2" color="primary" sx={{ mb: 1 }}>Download Notice Links</Typography>
-                            {formData.importantLinks.downloadNotice.map((link, index) => (
+                            {safeNoticeLinks.map((link, index) => (
                                 <Grid container spacing={2} alignItems="center" key={`notice-${index}`} sx={{ mb: 2, px: 2 }}>
                                     <Grid item xs={12} sm={5}>
                                         <TextField fullWidth size="small" label="Label" value={link.label} onChange={(e) => handleDynamicLinkChange("downloadNotice", index, "label", e.target.value)} />
@@ -255,7 +378,7 @@ const AdminAddAdmission = () => {
                                         <TextField fullWidth size="small" label="URL" value={link.url} onChange={(e) => handleDynamicLinkChange("downloadNotice", index, "url", e.target.value)} />
                                     </Grid>
                                     <Grid item xs={12} sm={1}>
-                                        <IconButton color="error" onClick={() => removeDynamicLink("downloadNotice", index)} disabled={formData.importantLinks.downloadNotice.length === 1}>
+                                        <IconButton color="error" onClick={() => removeDynamicLink("downloadNotice", index)} disabled={safeNoticeLinks.length === 1}>
                                             <RemoveCircleOutline />
                                         </IconButton>
                                     </Grid>
@@ -268,7 +391,7 @@ const AdminAddAdmission = () => {
                         <Grid item xs={12} sx={{ mt: 2 }}>
                             <TextField
                                 fullWidth size="small" label="Official Website URL"
-                                value={formData.importantLinks.officialWebsite} onChange={handleOfficialWebsiteChange}
+                                value={formData.importantLinks?.officialWebsite || ""} onChange={handleOfficialWebsiteChange}
                             />
                         </Grid>
 
