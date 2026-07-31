@@ -13,6 +13,10 @@ import {
     Alert,
     CircularProgress,
     IconButton,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from "@mui/material";
 import {
     AddCircleOutline,
@@ -22,7 +26,8 @@ import {
     FormatBold,
     FormatItalic,
     FormatListBulleted,
-    FormatListNumbered
+    FormatListNumbered,
+    Visibility
 } from "@mui/icons-material";
 import axios from "axios";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -33,7 +38,7 @@ const TipTapEditor = ({ content, onChange }) => {
     const editor = useEditor({
         extensions: [StarterKit],
         content: content,
-        immediatelyRender: false, // Prevents SSR hydration mismatch
+        immediatelyRender: false,
         onUpdate: ({ editor }) => {
             onChange(editor.getHTML());
         },
@@ -43,6 +48,13 @@ const TipTapEditor = ({ content, onChange }) => {
             },
         },
     });
+
+    // Update editor content if it changes externally (e.g., when data loads)
+    useEffect(() => {
+        if (editor && content && editor.getHTML() !== content) {
+            editor.commands.setContent(content);
+        }
+    }, [content, editor]);
 
     if (!editor) return null;
 
@@ -80,6 +92,7 @@ const AdminEditAnswerKey = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [statusMessage, setStatusMessage] = useState(null);
+    const [previewOpen, setPreviewOpen] = useState(false);
 
     useEffect(() => {
         const fetchAnswerKeyData = async () => {
@@ -87,7 +100,7 @@ const AdminEditAnswerKey = () => {
                 const res = await axios.get(`https://www.finderight.com/api/answer-keys/${slug}`);
                 const data = res.data.answerKey || res.data; 
 
-                // 🚨 SAFEGUARD: Handle both OLD (String) and NEW (Array) database schemas
+                // 🚨 SAFEGUARD: Handle both OLD (String) and NEW (Array) download links schemas
                 let parsedLinks = { downloadAnswerKey: [{ label: "Download Answer Key", url: "" }], officialWebsite: "" };
 
                 if (data.importantLinks) {
@@ -99,8 +112,30 @@ const AdminEditAnswerKey = () => {
                     parsedLinks.officialWebsite = data.importantLinks.officialWebsite || "";
                 }
 
+                // 🚨 SAFEGUARD: Migrate old hardcoded dates to the new dynamic keyDates array if needed
+                let parsedKeyDates = data.keyDates || [];
+                if (parsedKeyDates.length === 0) {
+                    if (data.applicationBegin || data.examDate || data.answerKeyRelease) {
+                        if (data.applicationBegin) parsedKeyDates.push({ label: "Application Begin", value: data.applicationBegin });
+                        if (data.lastDateApply) parsedKeyDates.push({ label: "Last Date to Apply", value: data.lastDateApply });
+                        if (data.examDate) parsedKeyDates.push({ label: "Exam Date", value: data.examDate });
+                        if (data.admitcard) parsedKeyDates.push({ label: "Admit Card Release", value: data.admitcard });
+                        if (data.answerKeyRelease) parsedKeyDates.push({ label: "Answer Key Release", value: data.answerKeyRelease });
+                    } else {
+                        parsedKeyDates = [
+                            { label: "Application Begin", value: "" },
+                            { label: "Last Date to Apply", value: "" },
+                            { label: "Exam Date", value: "" },
+                        ];
+                    }
+                }
+
                 setFormData({
                     ...data,
+                    slug: data.slug || "",
+                    seoKeywords: data.seoKeywords || "",
+                    metaDescription: data.metaDescription || "",
+                    keyDates: parsedKeyDates,
                     importantLinks: parsedLinks
                 });
             } catch (err) {
@@ -123,6 +158,26 @@ const AdminEditAnswerKey = () => {
         setFormData((prev) => ({ ...prev, howToCheck: htmlContent }));
     };
 
+    // --- Dynamic Key Dates Handlers ---
+    const handleDynamicDateChange = (index, field, value) => {
+        const updatedDates = [...formData.keyDates];
+        updatedDates[index][field] = value;
+        setFormData({ ...formData, keyDates: updatedDates });
+    };
+
+    const addDynamicDate = () => {
+        setFormData({
+            ...formData,
+            keyDates: [...formData.keyDates, { label: "Custom Date Label", value: "" }]
+        });
+    };
+
+    const removeDynamicDate = (index) => {
+        const updatedDates = formData.keyDates.filter((_, i) => i !== index);
+        setFormData({ ...formData, keyDates: updatedDates });
+    };
+
+    // --- Dynamic Links Handlers ---
     const handleDynamicLinkChange = (index, field, value) => {
         const updatedLinks = [...formData.importantLinks.downloadAnswerKey];
         updatedLinks[index][field] = value;
@@ -161,8 +216,8 @@ const AdminEditAnswerKey = () => {
         e.preventDefault();
         setStatusMessage(null);
 
-        if (!formData.title || !formData.conductedby) {
-            setStatusMessage({ message: "Title and Conducted By are required fields.", severity: "error" });
+        if (!formData.title || !formData.slug || !formData.conductedby) {
+            setStatusMessage({ message: "Title, Slug, and Conducted By are required fields.", severity: "error" });
             return;
         }
 
@@ -173,7 +228,7 @@ const AdminEditAnswerKey = () => {
             setStatusMessage({ message: "Answer Key updated successfully! Redirecting...", severity: "success" });
             
             setTimeout(() => {
-                router.push("/admin/manage-answer-keys"); // Adjust based on your routing
+                router.push("/admin/manage-answer-keys");
             }, 1000);
         } catch (err) {
             console.error(err);
@@ -225,8 +280,9 @@ const AdminEditAnswerKey = () => {
                 <form onSubmit={handleSubmit} autoComplete="off">
                     <Grid container spacing={3}>
                         
+                        {/* --- Basic Info & SEO --- */}
                         <Grid item xs={12}>
-                            <Divider sx={{ mb: 1, fontWeight: 'bold' }}>📋 Basic Information</Divider>
+                            <Divider sx={{ mb: 1, fontWeight: 'bold' }}>📋 Basic & SEO Information</Divider>
                         </Grid>
 
                         <Grid item xs={12} md={6}>
@@ -237,39 +293,91 @@ const AdminEditAnswerKey = () => {
                         </Grid>
                         <Grid item xs={12} md={6}>
                             <TextField
+                                fullWidth required label="Manual Slug"
+                                name="slug" value={formData.slug} onChange={handleChange} size="small"
+                                helperText="Changing this will alter the live URL."
+                            />
+                        </Grid>
+
+                        <Grid item xs={12} md={6}>
+                            <TextField
                                 fullWidth required label="Conducted By (Authority)"
                                 name="conductedby" value={formData.conductedby} onChange={handleChange} size="small"
                             />
                         </Grid>
-
-                        <Grid item xs={12}>
-                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Key Dates (Free Text)</Divider>
+                        <Grid item xs={12} md={6}>
+                            <TextField
+                                fullWidth label="SEO Keywords (Comma Separated)"
+                                name="seoKeywords" value={formData.seoKeywords} onChange={handleChange} size="small"
+                            />
                         </Grid>
 
-                        {[
-                            { label: "Application Begin", name: "applicationBegin" },
-                            { label: "Last Date to Apply", name: "lastDateApply" },
-                            { label: "Exam Date", name: "examDate" },
-                            { label: "Admit Card Release", name: "admitcard" },
-                            { label: "Answer Key Release", name: "answerKeyRelease" },
-                            { label: "Publish Date", name: "publishDate" },
-                        ].map(({ label, name }) => (
-                            <Grid item xs={12} sm={6} md={4} key={name}>
-                                <TextField
-                                    fullWidth label={label} name={name}
-                                    value={formData[name] || ""} onChange={handleChange} size="small"
-                                />
+                        <Grid item xs={12}>
+                            <TextField
+                                fullWidth multiline rows={2} label="Meta Description"
+                                name="metaDescription" value={formData.metaDescription} onChange={handleChange} size="small"
+                            />
+                        </Grid>
+
+                        {/* --- Dynamic Timeline Dates --- */}
+                        <Grid item xs={12}>
+                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Key Dates (Customizable Labels)</Divider>
+                        </Grid>
+
+                        {formData.keyDates.map((dateItem, index) => (
+                            <Grid container spacing={2} alignItems="center" key={index} sx={{ mb: 2, px: 3 }}>
+                                <Grid item xs={12} sm={5}>
+                                    <TextField
+                                        fullWidth size="small" label="Date Label"
+                                        value={dateItem.label} onChange={(e) => handleDynamicDateChange(index, "label", e.target.value)}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth size="small" label="Date / Value"
+                                        value={dateItem.value} onChange={(e) => handleDynamicDateChange(index, "value", e.target.value)}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={1}>
+                                    <IconButton 
+                                        color="error" onClick={() => removeDynamicDate(index)} 
+                                        disabled={formData.keyDates.length === 1}
+                                    >
+                                        <RemoveCircleOutline />
+                                    </IconButton>
+                                </Grid>
                             </Grid>
                         ))}
+                        <Grid item xs={12} sx={{ pl: 3 }}>
+                            <Button startIcon={<AddCircleOutline />} onClick={addDynamicDate} variant="text" color="secondary">
+                                Add Another Key Date
+                            </Button>
+                        </Grid>
 
+                        {/* --- Rich Text Details --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📖 How to Check / Details</Divider>
+                            
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                    Use the editor below to format steps, lists, and bold text.
+                                </Typography>
+                                <Button 
+                                    size="small" startIcon={<Visibility />} 
+                                    onClick={() => setPreviewOpen(true)}
+                                    variant="outlined" color="primary"
+                                >
+                                    Live Preview
+                                </Button>
+                            </Box>
+
                             <TipTapEditor 
                                 content={formData.howToCheck} 
                                 onChange={handleTipTapChange} 
                             />
                         </Grid>
 
+                        {/* --- Download Links --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold', color: '#9c27b0' }}>
                                 🔗 Download Links
@@ -304,6 +412,7 @@ const AdminEditAnswerKey = () => {
                             </Button>
                         </Grid>
 
+                        {/* --- Official Website --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>🌐 Official Website</Divider>
                             <TextField
@@ -312,6 +421,7 @@ const AdminEditAnswerKey = () => {
                             />
                         </Grid>
 
+                        {/* --- Submit Button --- */}
                         <Grid item xs={12} sx={{ textAlign: 'center', mt: 4 }}>
                             <Button 
                                 type="submit" variant="contained" color="secondary" disabled={saving}
@@ -325,6 +435,36 @@ const AdminEditAnswerKey = () => {
                     </Grid>
                 </form>
             </Paper>
+
+            {/* --- Live Preview Dialog Modal --- */}
+            <Dialog 
+                open={previewOpen} 
+                onClose={() => setPreviewOpen(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle sx={{ fontWeight: 'bold', borderBottom: '1px solid #e0e0e0' }}>
+                    Live Preview: How to Check / Details
+                </DialogTitle>
+                <DialogContent dividers sx={{ minHeight: '300px', backgroundColor: '#fafafa' }}>
+                    {formData.howToCheck ? (
+                        <div 
+                            className="prose max-w-none"
+                            dangerouslySetInnerHTML={{ __html: formData.howToCheck }} 
+                        />
+                    ) : (
+                        <Typography color="text.secondary" align="center" sx={{ mt: 4 }}>
+                            No content to preview yet.
+                        </Typography>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setPreviewOpen(false)} variant="contained" color="primary">
+                        Close Preview
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
         </Box>
     );
 };

@@ -12,6 +12,10 @@ import {
     Alert,
     CircularProgress,
     IconButton,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from "@mui/material";
 import {
     AddCircleOutline,
@@ -20,7 +24,8 @@ import {
     FormatBold,
     FormatItalic,
     FormatListBulleted,
-    FormatListNumbered
+    FormatListNumbered,
+    Visibility
 } from "@mui/icons-material";
 import axios from "axios";
 import { useRouter } from "next/navigation";
@@ -28,12 +33,11 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
 // --- TipTap Editor Component ---
-// --- TipTap Editor Component ---
 const TipTapEditor = ({ content, onChange }) => {
     const editor = useEditor({
         extensions: [StarterKit],
         content: content,
-        immediatelyRender: false, // ✅ Added this line to fix the SSR hydration error!
+        immediatelyRender: false,
         onUpdate: ({ editor }) => {
             onChange(editor.getHTML());
         },
@@ -87,19 +91,21 @@ const TipTapEditor = ({ content, onChange }) => {
         </div>
     );
 };
+
 // --- Main Form Component ---
 const initialState = {
     title: "",
+    slug: "",
+    seoKeywords: "",
+    metaDescription: "",
     conductedby: "",
-    applicationBegin: "",
-    lastDateApply: "",
-    examDate: "",
-    admitcard: "",
-    answerKeyRelease: "",
-    howToCheck: "", // This will now hold HTML
-    publishDate: "",
+    keyDates: [
+        { label: "Application Begin", value: "" },
+        { label: "Last Date to Apply", value: "" },
+        { label: "Exam Date", value: "" },
+    ],
+    howToCheck: "", // Holds HTML
     importantLinks: {
-        // Dynamic array for multiple SEO-friendly download links
         downloadAnswerKey: [{ label: "Download Answer Key", url: "" }],
         officialWebsite: "",
     },
@@ -109,6 +115,7 @@ const AdminAddAnswerKey = () => {
     const [formData, setFormData] = useState(initialState);
     const [loading, setLoading] = useState(false);
     const [statusMessage, setStatusMessage] = useState(null);
+    const [previewOpen, setPreviewOpen] = useState(false);
     const router = useRouter();
 
     const handleChange = (e) => {
@@ -116,12 +123,31 @@ const AdminAddAnswerKey = () => {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    // Handler specifically for TipTap HTML updates
+    // --- TipTap HTML Update ---
     const handleTipTapChange = (htmlContent) => {
         setFormData((prev) => ({ ...prev, howToCheck: htmlContent }));
     };
 
-    // Handlers for dynamic multiple links
+    // --- Dynamic Key Dates Handlers ---
+    const handleDynamicDateChange = (index, field, value) => {
+        const updatedDates = [...formData.keyDates];
+        updatedDates[index][field] = value;
+        setFormData({ ...formData, keyDates: updatedDates });
+    };
+
+    const addDynamicDate = () => {
+        setFormData({
+            ...formData,
+            keyDates: [...formData.keyDates, { label: "Custom Date Label", value: "" }]
+        });
+    };
+
+    const removeDynamicDate = (index) => {
+        const updatedDates = formData.keyDates.filter((_, i) => i !== index);
+        setFormData({ ...formData, keyDates: updatedDates });
+    };
+
+    // --- Dynamic Links Handlers ---
     const handleDynamicLinkChange = (index, field, value) => {
         const updatedLinks = [...formData.importantLinks.downloadAnswerKey];
         updatedLinks[index][field] = value;
@@ -160,9 +186,8 @@ const AdminAddAnswerKey = () => {
         e.preventDefault();
         setStatusMessage(null);
 
-        // Basic validation
-        if (!formData.title || !formData.conductedby) {
-            setStatusMessage({ message: "Title and Conducted By are required fields.", severity: "error" });
+        if (!formData.title || !formData.slug || !formData.conductedby) {
+            setStatusMessage({ message: "Title, Slug, and Conducted By are required fields.", severity: "error" });
             return;
         }
 
@@ -175,7 +200,7 @@ const AdminAddAnswerKey = () => {
             setFormData(initialState);
             
             setTimeout(() => {
-                router.push("/admin/manage-answer-keys"); // Ensure this points to your manage list
+                router.push("/admin/manage-answer-keys");
             }, 1000);
         } catch (err) {
             console.error("❌ Failed to add answer key:", err);
@@ -201,9 +226,9 @@ const AdminAddAnswerKey = () => {
                 <form onSubmit={handleSubmit} autoComplete="off">
                     <Grid container spacing={3}>
                         
-                        {/* --- Basic Info --- */}
+                        {/* --- Basic Info & SEO --- */}
                         <Grid item xs={12}>
-                            <Divider sx={{ mb: 1, fontWeight: 'bold' }}>📋 Basic Information</Divider>
+                            <Divider sx={{ mb: 1, fontWeight: 'bold' }}>📋 Basic & SEO Information</Divider>
                         </Grid>
 
                         <Grid item xs={12} md={6}>
@@ -216,44 +241,101 @@ const AdminAddAnswerKey = () => {
                         </Grid>
                         <Grid item xs={12} md={6}>
                             <TextField
+                                fullWidth required label="Manual Slug"
+                                name="slug" value={formData.slug} onChange={handleChange}
+                                placeholder="e.g., ssc-chsl-tier-1-answer-key-2026"
+                                size="small"
+                            />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={6}>
+                            <TextField
                                 fullWidth required label="Conducted By (Authority)"
                                 name="conductedby" value={formData.conductedby} onChange={handleChange}
                                 placeholder="e.g., Staff Selection Commission"
                                 size="small"
                             />
                         </Grid>
-
-                        {/* --- Timeline Dates --- */}
-                        <Grid item xs={12}>
-                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Key Dates (Free Text)</Divider>
+                        <Grid item xs={12} md={6}>
+                            <TextField
+                                fullWidth label="SEO Keywords (Comma Separated)"
+                                name="seoKeywords" value={formData.seoKeywords} onChange={handleChange}
+                                placeholder="e.g., SSC CHSL answer key, SSC Tier 1 solution, 2026"
+                                size="small"
+                            />
                         </Grid>
 
-                        {[
-                            { label: "Application Begin", name: "applicationBegin" },
-                            { label: "Last Date to Apply", name: "lastDateApply" },
-                            { label: "Exam Date", name: "examDate" },
-                            { label: "Admit Card Release", name: "admitcard" },
-                            { label: "Answer Key Release", name: "answerKeyRelease" },
-                            { label: "Publish Date", name: "publishDate", placeholder: "e.g., 2026-05-15" },
-                        ].map(({ label, name, placeholder }) => (
-                            <Grid item xs={12} sm={6} md={4} key={name}>
-                                <TextField
-                                    fullWidth label={label} name={name}
-                                    value={formData[name] || ""} onChange={handleChange}
-                                    placeholder={placeholder || "e.g., TBA or 15 May 2026"}
-                                    size="small"
-                                />
+                        <Grid item xs={12}>
+                            <TextField
+                                fullWidth multiline rows={2} label="Meta Description"
+                                name="metaDescription" value={formData.metaDescription} onChange={handleChange}
+                                placeholder="Write a brief, SEO-friendly summary..."
+                                size="small"
+                            />
+                        </Grid>
+
+                        {/* --- Dynamic Timeline Dates --- */}
+                        <Grid item xs={12}>
+                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Key Dates (Customizable Labels)</Divider>
+                        </Grid>
+
+                        {formData.keyDates.map((dateItem, index) => (
+                            <Grid container spacing={2} alignItems="center" key={index} sx={{ mb: 2, px: 3 }}>
+                                <Grid item xs={12} sm={5}>
+                                    <TextField
+                                        fullWidth size="small"
+                                        label="Date Label"
+                                        value={dateItem.label}
+                                        onChange={(e) => handleDynamicDateChange(index, "label", e.target.value)}
+                                        placeholder="e.g., Exam Date"
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth size="small"
+                                        label="Date / Value"
+                                        value={dateItem.value}
+                                        onChange={(e) => handleDynamicDateChange(index, "value", e.target.value)}
+                                        placeholder="e.g., 15 May 2026 or TBA"
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={1}>
+                                    <IconButton 
+                                        color="error" 
+                                        onClick={() => removeDynamicDate(index)} 
+                                        disabled={formData.keyDates.length === 1}
+                                    >
+                                        <RemoveCircleOutline />
+                                    </IconButton>
+                                </Grid>
                             </Grid>
                         ))}
+                        <Grid item xs={12} sx={{ pl: 3 }}>
+                            <Button startIcon={<AddCircleOutline />} onClick={addDynamicDate} variant="text" color="secondary">
+                                Add Another Key Date
+                            </Button>
+                        </Grid>
 
-                        {/* --- Rich Text Details --- */}
+                        {/* --- Rich Text Details with Live Preview --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📖 How to Check / Details</Divider>
-                            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                                Use the editor below to format steps, lists, and bold text.
-                            </Typography>
                             
-                            {/* Render the custom TipTap Editor here */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                    Use the editor below to format steps, lists, and bold text.
+                                </Typography>
+                                <Button 
+                                    size="small" 
+                                    startIcon={<Visibility />} 
+                                    onClick={() => setPreviewOpen(true)}
+                                    variant="outlined"
+                                    color="primary"
+                                >
+                                    Live Preview
+                                </Button>
+                            </Box>
+                            
+                            {/* TipTap Editor */}
                             <TipTapEditor 
                                 content={formData.howToCheck} 
                                 onChange={handleTipTapChange} 
@@ -321,7 +403,7 @@ const AdminAddAnswerKey = () => {
                             <Button 
                                 type="submit" 
                                 variant="contained" 
-                                color="secondary" // matches the purple header theme
+                                color="secondary" 
                                 disabled={loading}
                                 sx={{ py: 1.5, px: 6, fontSize: '1.1rem', borderRadius: 8 }}
                                 startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <CheckCircleOutline />}
@@ -333,6 +415,35 @@ const AdminAddAnswerKey = () => {
                     </Grid>
                 </form>
             </Paper>
+
+            {/* --- Live Preview Dialog Modal --- */}
+            <Dialog 
+                open={previewOpen} 
+                onClose={() => setPreviewOpen(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle sx={{ fontWeight: 'bold', borderBottom: '1px solid #e0e0e0' }}>
+                    Live Preview: How to Check / Details
+                </DialogTitle>
+                <DialogContent dividers sx={{ minHeight: '300px', backgroundColor: '#fafafa' }}>
+                    {formData.howToCheck ? (
+                        <div 
+                            className="prose max-w-none"
+                            dangerouslySetInnerHTML={{ __html: formData.howToCheck }} 
+                        />
+                    ) : (
+                        <Typography color="text.secondary" align="center" sx={{ mt: 4 }}>
+                            No content to preview yet. Start typing in the editor!
+                        </Typography>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setPreviewOpen(false)} variant="contained" color="primary">
+                        Close Preview
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };
