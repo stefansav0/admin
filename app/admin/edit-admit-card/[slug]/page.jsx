@@ -13,14 +13,39 @@ import {
     Alert,
     CircularProgress,
     IconButton,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
 } from "@mui/material";
 import {
     AddCircleOutline,
     RemoveCircleOutline,
     SaveOutlined,
-    ArrowBack
+    ArrowBack,
+    Visibility,
 } from "@mui/icons-material";
 import axios from "axios";
+
+// Fallback initial state in case data is missing
+const fallbackState = {
+    title: "",
+    slug: "",
+    conductedby: "",
+    seoKeywords: "",
+    metaDescription: "",
+    keyDates: [
+        { label: "Application Begin", value: "" },
+        { label: "Last Date to Apply", value: "" },
+        { label: "Exam Date", value: "" },
+    ],
+    description: "",
+    howToDownload: "",
+    importantLinks: {
+        downloadAdmitCard: [{ label: "Download Admit Card", url: "" }],
+        officialWebsite: "",
+    },
+};
 
 const AdminEditAdmitCard = () => {
     const params = useParams();
@@ -31,15 +56,16 @@ const AdminEditAdmitCard = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [statusMessage, setStatusMessage] = useState(null);
+    const [previewOpen, setPreviewOpen] = useState(false);
 
     useEffect(() => {
         const fetchAdmitCardData = async () => {
             try {
                 const res = await axios.get(`https://www.finderight.com/api/admit-cards/${slug}`);
                 // Safely extract the data depending on how your API wraps the response
-                const data = res.data.admitCard || res.data; 
+                const data = res.data.result || res.data.admitCard || res.data; 
 
-                // 🚨 SAFEGUARD: Handle both OLD (String) and NEW (Array) database schemas
+                // 🚨 SAFEGUARD: Handle Important Links
                 let parsedLinks = { downloadAdmitCard: [{ label: "Download Admit Card", url: "" }], officialWebsite: "" };
 
                 if (data.importantLinks) {
@@ -51,9 +77,27 @@ const AdminEditAdmitCard = () => {
                     parsedLinks.officialWebsite = data.importantLinks.officialWebsite || "";
                 }
 
+                // 🚨 SAFEGUARD: Handle Dynamic Key Dates Migration
+                let parsedKeyDates = data.keyDates && Array.isArray(data.keyDates) ? data.keyDates : [];
+                
+                if (parsedKeyDates.length === 0) {
+                    if (data.applicationBegin) parsedKeyDates.push({ label: "Application Begin", value: data.applicationBegin });
+                    if (data.lastDateApply) parsedKeyDates.push({ label: "Last Date to Apply", value: data.lastDateApply });
+                    if (data.examDate) parsedKeyDates.push({ label: "Exam Date", value: data.examDate });
+                    if (data.admitCard) parsedKeyDates.push({ label: "Admit Card Release", value: data.admitCard });
+                    if (data.publishDate) parsedKeyDates.push({ label: "Publish Date", value: data.publishDate });
+                    
+                    if (parsedKeyDates.length === 0) {
+                        parsedKeyDates = [...fallbackState.keyDates];
+                    }
+                }
+
                 setFormData({
+                    ...fallbackState, // Ensure all fields exist
                     ...data,
-                    importantLinks: parsedLinks
+                    slug: data.slug || slug, // Populate existing slug
+                    importantLinks: parsedLinks,
+                    keyDates: parsedKeyDates
                 });
             } catch (err) {
                 console.error(err);
@@ -68,9 +112,35 @@ const AdminEditAdmitCard = () => {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+        // Basic formatting for slug: lowercase and replace spaces with hyphens
+        if (name === "slug") {
+            const formattedSlug = value.toLowerCase().replace(/\s+/g, '-');
+            setFormData((prev) => ({ ...prev, [name]: formattedSlug }));
+        } else {
+            setFormData((prev) => ({ ...prev, [name]: value }));
+        }
     };
 
+    // --- Dynamic Handlers for Key Dates ---
+    const handleKeyDateChange = (index, field, value) => {
+        const updatedDates = [...formData.keyDates];
+        updatedDates[index][field] = value;
+        setFormData({ ...formData, keyDates: updatedDates });
+    };
+
+    const addKeyDate = () => {
+        setFormData({
+            ...formData,
+            keyDates: [...formData.keyDates, { label: "New Event", value: "" }]
+        });
+    };
+
+    const removeKeyDate = (index) => {
+        const updatedDates = formData.keyDates.filter((_, i) => i !== index);
+        setFormData({ ...formData, keyDates: updatedDates });
+    };
+
+    // --- Dynamic Handlers for Links ---
     const handleDynamicLinkChange = (index, field, value) => {
         const updatedLinks = [...formData.importantLinks.downloadAdmitCard];
         updatedLinks[index][field] = value;
@@ -117,11 +187,12 @@ const AdminEditAdmitCard = () => {
         setSaving(true);
 
         try {
+            // Note: We use the original `slug` from the URL to find the document in the DB
             await axios.put(`https://www.finderight.com/api/admit-cards/${slug}`, formData);
             setStatusMessage({ message: "Admit Card updated successfully! Redirecting...", severity: "success" });
             
             setTimeout(() => {
-                router.push("/admin/admit-cards"); // Or wherever your manage page is located
+                router.push("/admin/manage-admit-cards");
             }, 1000);
         } catch (err) {
             console.error(err);
@@ -143,7 +214,7 @@ const AdminEditAdmitCard = () => {
         return (
             <Box sx={{ maxWidth: 600, mx: "auto", mt: 10 }}>
                 <Alert severity="error">{statusMessage?.message || "Data could not be loaded."}</Alert>
-                <Button sx={{ mt: 2 }} onClick={() => router.push("/admin/admit-cards")}>Go Back</Button>
+                <Button sx={{ mt: 2 }} onClick={() => router.push("/admin/manage-admit-cards")}>Go Back</Button>
             </Box>
         );
     }
@@ -172,13 +243,14 @@ const AdminEditAdmitCard = () => {
                 <form onSubmit={handleSubmit} autoComplete="off">
                     <Grid container spacing={3}>
                         
+                        {/* --- Basic Info --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mb: 1, fontWeight: 'bold' }}>📋 Admit Card Information</Divider>
                         </Grid>
 
                         <Grid item xs={12} md={6}>
                             <TextField
-                                fullWidth required label="Title (SEO Optimized)"
+                                fullWidth required label="Title"
                                 name="title" value={formData.title} onChange={handleChange} size="small"
                             />
                         </Grid>
@@ -189,47 +261,113 @@ const AdminEditAdmitCard = () => {
                             />
                         </Grid>
 
+                        {/* --- Manual Slug --- */}
                         <Grid item xs={12}>
-                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Key Dates (Free Text or Format)</Divider>
+                            <TextField
+                                fullWidth label="URL Slug (Manual)"
+                                name="slug" value={formData.slug || ""} onChange={handleChange}
+                                placeholder="e.g., ssc-cgl-tier-1-admit-card-2026"
+                                size="small"
+                                helperText="Modify with caution. Changing the slug will change the URL of this post."
+                            />
                         </Grid>
 
-                        {[
-                            { label: "Application Begin", name: "applicationBegin" },
-                            { label: "Last Date to Apply", name: "lastDateApply" },
-                            { label: "Exam Date", name: "examDate" },
-                            { label: "Admit Card Release", name: "admitCard" },
-                            { label: "Publish Date", name: "publishDate" },
-                        ].map(({ label, name }) => (
-                            <Grid item xs={12} sm={6} md={4} key={name}>
-                                <TextField
-                                    fullWidth label={label} name={name}
-                                    value={formData[name] || ""} onChange={handleChange} size="small"
-                                />
+                        {/* --- SEO Details --- */}
+                        <Grid item xs={12}>
+                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>🔍 SEO Settings</Divider>
+                        </Grid>
+                        
+                        <Grid item xs={12}>
+                            <TextField
+                                fullWidth label="SEO Keywords (Comma Separated)"
+                                name="seoKeywords" value={formData.seoKeywords || ""} onChange={handleChange}
+                                placeholder="e.g., SSC admit card, CGL tier 1 download, hall ticket"
+                                size="small"
+                            />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField
+                                fullWidth multiline rows={2}
+                                label="Meta Description"
+                                name="metaDescription" value={formData.metaDescription || ""} onChange={handleChange}
+                                placeholder="Write a short, engaging description for search engines..."
+                            />
+                        </Grid>
+
+                        {/* --- Dynamic Timeline Dates --- */}
+                        <Grid item xs={12}>
+                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📅 Key Dates</Divider>
+                        </Grid>
+
+                        {formData.keyDates.map((dateItem, index) => (
+                            <Grid container spacing={2} alignItems="center" key={index} sx={{ mb: 2, px: 3 }}>
+                                <Grid item xs={12} sm={5}>
+                                    <TextField
+                                        fullWidth size="small"
+                                        label="Label (e.g., Application Begin)"
+                                        value={dateItem.label}
+                                        onChange={(e) => handleKeyDateChange(index, "label", e.target.value)}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth size="small"
+                                        label="Date / Value (e.g., 15 May 2026)"
+                                        value={dateItem.value}
+                                        onChange={(e) => handleKeyDateChange(index, "value", e.target.value)}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={1}>
+                                    <IconButton 
+                                        color="error" 
+                                        onClick={() => removeKeyDate(index)} 
+                                    >
+                                        <RemoveCircleOutline />
+                                    </IconButton>
+                                </Grid>
                             </Grid>
                         ))}
 
+                        <Grid item xs={12} sx={{ pl: 3 }}>
+                            <Button startIcon={<AddCircleOutline />} onClick={addKeyDate} variant="text" color="primary">
+                                Add Another Date
+                            </Button>
+                        </Grid>
+
+                        {/* --- Details --- */}
                         <Grid item xs={12}>
-                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📄 Detailed Information</Divider>
+                            <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>📄 Detailed Information (HTML Supported)</Divider>
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+                                <Button 
+                                    size="small" 
+                                    variant="outlined" 
+                                    startIcon={<Visibility />}
+                                    onClick={() => setPreviewOpen(true)}
+                                >
+                                    Preview HTML
+                                </Button>
+                            </Box>
                         </Grid>
 
                         <Grid item xs={12}>
                             <TextField
-                                fullWidth multiline rows={3}
+                                fullWidth multiline rows={5}
                                 label="Description / Short Notice"
                                 name="description" value={formData.description || ""} onChange={handleChange}
                             />
                         </Grid>
                         <Grid item xs={12}>
                             <TextField
-                                fullWidth multiline rows={3}
+                                fullWidth multiline rows={4}
                                 label="How to Download Admit Card"
                                 name="howToDownload" value={formData.howToDownload || ""} onChange={handleChange}
                             />
                         </Grid>
 
+                        {/* --- SEO Optimized Download Links --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold', color: '#1976d2' }}>
-                                🔗 Download Links
+                                🔗 Multiple Download Links
                             </Divider>
                         </Grid>
 
@@ -237,13 +375,13 @@ const AdminEditAdmitCard = () => {
                             <Grid container spacing={2} alignItems="center" key={index} sx={{ mb: 2, px: 3 }}>
                                 <Grid item xs={12} sm={5}>
                                     <TextField
-                                        fullWidth size="small" label="Label"
+                                        fullWidth size="small" label="Link Label"
                                         value={link.label} onChange={(e) => handleDynamicLinkChange(index, "label", e.target.value)}
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={6}>
                                     <TextField
-                                        fullWidth size="small" label="URL"
+                                        fullWidth size="small" label="Direct URL"
                                         value={link.url} onChange={(e) => handleDynamicLinkChange(index, "url", e.target.value)}
                                     />
                                 </Grid>
@@ -261,6 +399,7 @@ const AdminEditAdmitCard = () => {
                             </Button>
                         </Grid>
 
+                        {/* --- Official Website --- */}
                         <Grid item xs={12}>
                             <Divider sx={{ mt: 2, mb: 1, fontWeight: 'bold' }}>🌐 Official Website</Divider>
                             <TextField
@@ -269,6 +408,7 @@ const AdminEditAdmitCard = () => {
                             />
                         </Grid>
 
+                        {/* --- Submit Button --- */}
                         <Grid item xs={12} sx={{ textAlign: 'center', mt: 4 }}>
                             <Button 
                                 type="submit" variant="contained" color="warning" disabled={saving}
@@ -282,6 +422,42 @@ const AdminEditAdmitCard = () => {
                     </Grid>
                 </form>
             </Paper>
+
+            {/* --- HTML Preview Dialog --- */}
+            <Dialog 
+                open={previewOpen} 
+                onClose={() => setPreviewOpen(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+                    Live HTML Preview
+                </DialogTitle>
+                <DialogContent dividers sx={{ backgroundColor: '#f9f9f9' }}>
+                    <Typography variant="h6" gutterBottom>Description:</Typography>
+                    <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
+                        {formData.description ? (
+                            <Box dangerouslySetInnerHTML={{ __html: formData.description }} />
+                        ) : (
+                            <Typography variant="body2" color="text.secondary">No description provided yet.</Typography>
+                        )}
+                    </Paper>
+
+                    <Typography variant="h6" gutterBottom>How to Download:</Typography>
+                    <Paper elevation={1} sx={{ p: 2 }}>
+                        {formData.howToDownload ? (
+                            <Box dangerouslySetInnerHTML={{ __html: formData.howToDownload }} />
+                        ) : (
+                            <Typography variant="body2" color="text.secondary">No instructions provided yet.</Typography>
+                        )}
+                    </Paper>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setPreviewOpen(false)} color="primary" variant="contained">
+                        Close Preview
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };
