@@ -9,23 +9,39 @@ import {
     Grid,
     Box,
     Paper,
-    Divider
+    Divider,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from "@mui/material";
-// Using a generic close icon for removing the image (optional but good for UX)
+import { Visibility } from "@mui/icons-material"; 
 import TipTapEditor from "../../../components/TipTapEditor"; // adjust path as needed
 
 const initialState = {
     title: "",
     description: "",
-    coverImage: "",        // ✅ Now handles BOTH uploaded base64 and pasted URLs
+    coverImage: "",        
     slug: "",              
     metaDescription: "",   
     keywords: "",          
 };
 
+// ✅ HELPER: Decodes escaped HTML entities back to raw HTML tags for rendering
+const decodeHtml = (html) => {
+    if (!html) return "";
+    return html
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+};
+
 export default function AdminAddStudyNews() {
     const [news, setNews] = useState(initialState);
     const [isUploading, setIsUploading] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false); 
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -241,11 +257,21 @@ export default function AdminAddStudyNews() {
                             )}
                         </Grid>
 
-                        {/* Rich Description Field */}
+                        {/* Rich Description Field with Preview Button */}
                         <Grid item xs={12}>
-                            <Typography variant="subtitle1" gutterBottom>
-                                Description <span style={{ color: "#DC2626" }}>*</span>
-                            </Typography>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="subtitle1">
+                                    Description <span style={{ color: "#DC2626" }}>*</span>
+                                </Typography>
+                                <Button 
+                                    size="small" 
+                                    variant="outlined" 
+                                    startIcon={<Visibility />}
+                                    onClick={() => setPreviewOpen(true)}
+                                >
+                                    Preview Editor
+                                </Button>
+                            </Box>
                             <TipTapEditor
                                 content={news.description}
                                 onChange={(value) =>
@@ -277,6 +303,42 @@ export default function AdminAddStudyNews() {
                     </Grid>
                 </form>
             </Paper>
+
+            {/* --- HTML Preview Dialog --- */}
+            <Dialog 
+                open={previewOpen} 
+                onClose={() => setPreviewOpen(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle sx={{ fontWeight: 'bold', color: '#1976d2', borderBottom: '1px solid #e0e0e0' }}>
+                    Study News Editor Preview
+                </DialogTitle>
+                <DialogContent sx={{ backgroundColor: '#f9f9f9', minHeight: '400px', p: 4 }}>
+                    <Paper elevation={1} sx={{ p: 3, minHeight: '350px' }}>
+                        {news.description ? (
+                            <Box 
+                                className="prose max-w-none" 
+                                // ✅ We run decodeHtml() before rendering it
+                                dangerouslySetInnerHTML={{ __html: decodeHtml(news.description) }} 
+                                sx={{
+                                    '& img': { maxWidth: '100%', height: 'auto', borderRadius: 1 },
+                                    '& a': { color: '#1976d2', textDecoration: 'underline' }
+                                }}
+                            />
+                        ) : (
+                            <Typography variant="body1" color="text.secondary" align="center" sx={{ mt: 10 }}>
+                                No content to preview yet. Start typing in the editor!
+                            </Typography>
+                        )}
+                    </Paper>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, borderTop: '1px solid #e0e0e0' }}>
+                    <Button onClick={() => setPreviewOpen(false)} color="primary" variant="contained">
+                        Close Preview
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

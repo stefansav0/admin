@@ -11,8 +11,13 @@ import {
     Box,
     Paper,
     Divider,
-    CircularProgress
+    CircularProgress,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from "@mui/material";
+import { Visibility } from "@mui/icons-material"; // Icon for the preview button
 import TipTapEditor from "../../../../components/TipTapEditor"; // adjust path as needed
 
 const initialState = {
@@ -24,6 +29,17 @@ const initialState = {
     keywords: "",          
 };
 
+// ✅ HELPER: Decodes escaped HTML entities back to raw HTML tags for rendering
+const decodeHtml = (html) => {
+    if (!html) return "";
+    return html
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+};
+
 export default function AdminEditStudyNews() {
     const { slug: originalSlug } = useParams(); // Get the slug from the URL
     const router = useRouter();
@@ -31,6 +47,7 @@ export default function AdminEditStudyNews() {
     const [news, setNews] = useState(initialState);
     const [isLoading, setIsLoading] = useState(true);
     const [isUpdating, setIsUpdating] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false); // ✅ State for Preview Modal
 
     // Fetch existing data on mount
     useEffect(() => {
@@ -38,8 +55,9 @@ export default function AdminEditStudyNews() {
             try {
                 // Adjust the GET endpoint to match your actual API route
                 const response = await axios.get(`https://www.finderight.com/api/study-news/${originalSlug}`);
-                // Assuming response.data contains the news object
-                setNews(response.data); 
+                // Assuming response.data contains the news object (or response.data.result)
+                const data = response.data.result || response.data.studyNews || response.data;
+                setNews(data); 
             } catch (error) {
                 console.error("Error fetching news data:", error);
                 alert("❌ Failed to load news data. It might have been deleted.");
@@ -282,11 +300,21 @@ export default function AdminEditStudyNews() {
                             )}
                         </Grid>
 
-                        {/* Rich Description Field */}
+                        {/* Rich Description Field with Preview Button */}
                         <Grid item xs={12}>
-                            <Typography variant="subtitle1" gutterBottom>
-                                Description <span style={{ color: "#DC2626" }}>*</span>
-                            </Typography>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="subtitle1">
+                                    Description <span style={{ color: "#DC2626" }}>*</span>
+                                </Typography>
+                                <Button 
+                                    size="small" 
+                                    variant="outlined" 
+                                    startIcon={<Visibility />}
+                                    onClick={() => setPreviewOpen(true)}
+                                >
+                                    Preview Editor
+                                </Button>
+                            </Box>
                             <TipTapEditor
                                 content={news.description}
                                 onChange={(value) =>
@@ -318,6 +346,42 @@ export default function AdminEditStudyNews() {
                     </Grid>
                 </form>
             </Paper>
+
+            {/* --- HTML Preview Dialog --- */}
+            <Dialog 
+                open={previewOpen} 
+                onClose={() => setPreviewOpen(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle sx={{ fontWeight: 'bold', color: '#1976d2', borderBottom: '1px solid #e0e0e0' }}>
+                    Study News Editor Preview
+                </DialogTitle>
+                <DialogContent sx={{ backgroundColor: '#f9f9f9', minHeight: '400px', p: 4 }}>
+                    <Paper elevation={1} sx={{ p: 3, minHeight: '350px' }}>
+                        {news.description ? (
+                            <Box 
+                                className="prose max-w-none" 
+                                // ✅ We run decodeHtml() before rendering it
+                                dangerouslySetInnerHTML={{ __html: decodeHtml(news.description) }} 
+                                sx={{
+                                    '& img': { maxWidth: '100%', height: 'auto', borderRadius: 1 },
+                                    '& a': { color: '#1976d2', textDecoration: 'underline' }
+                                }}
+                            />
+                        ) : (
+                            <Typography variant="body1" color="text.secondary" align="center" sx={{ mt: 10 }}>
+                                No content to preview yet. Start typing in the editor!
+                            </Typography>
+                        )}
+                    </Paper>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, borderTop: '1px solid #e0e0e0' }}>
+                    <Button onClick={() => setPreviewOpen(false)} color="primary" variant="contained">
+                        Close Preview
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }
