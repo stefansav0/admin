@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import axios from "axios";
+import dynamic from "next/dynamic";
 import {
     TextField,
     Button,
@@ -17,8 +18,11 @@ import {
     DialogContent,
     DialogActions
 } from "@mui/material";
-import { Visibility } from "@mui/icons-material"; // Icon for the preview button
-import TipTapEditor from "../../../../components/TipTapEditor"; // adjust path as needed
+import { Visibility } from "@mui/icons-material";
+
+// ✅ Dynamically import ReactQuill to prevent SSR errors
+const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false });
+import "react-quill-new/dist/quill.snow.css";
 
 const initialState = {
     title: "",
@@ -40,42 +44,72 @@ const decodeHtml = (html) => {
         .replace(/&#39;/g, "'");
 };
 
+// ✅ Custom Toolbar Setup
+const quillModules = {
+    toolbar: [
+        [{ header: [1, 2, 3, 4, false] }],
+        ["bold", "italic", "underline", "strike", "blockquote"],
+        [{ align: [] }],
+        [
+            { list: "ordered" },
+            { list: "bullet" },
+            { indent: "-1" },
+            { indent: "+1" }
+        ],
+        [{ color: [] }, { background: [] }],
+        ["link", "image", "video"],
+        ["clean"]
+    ],
+};
+
+const quillFormats = [
+    "header",
+    "bold", "italic", "underline", "strike", "blockquote",
+    "align", "list", "indent",
+    "color", "background",
+    "link", "image", "video"
+];
+
 export default function AdminEditStudyNews() {
-    const { slug: originalSlug } = useParams(); // Get the slug from the URL
+    const { slug: originalSlug } = useParams();
     const router = useRouter();
 
     const [news, setNews] = useState(initialState);
     const [isLoading, setIsLoading] = useState(true);
     const [isUpdating, setIsUpdating] = useState(false);
-    const [previewOpen, setPreviewOpen] = useState(false); // ✅ State for Preview Modal
+    const [previewOpen, setPreviewOpen] = useState(false);
+    
+    // ✅ Hydration Mismatch Fix
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     // Fetch existing data on mount
     useEffect(() => {
         const fetchNewsData = async () => {
             try {
-                // Adjust the GET endpoint to match your actual API route
                 const response = await axios.get(`https://www.finderight.com/api/study-news/${originalSlug}`);
-                // Assuming response.data contains the news object (or response.data.result)
                 const data = response.data.result || response.data.studyNews || response.data;
                 setNews(data); 
             } catch (error) {
                 console.error("Error fetching news data:", error);
                 alert("❌ Failed to load news data. It might have been deleted.");
-                router.push("/admin/edit-study-news"); // Redirect back to list
+                router.push("/admin/edit-study-news"); 
             } finally {
                 setIsLoading(false);
             }
         };
 
-        if (originalSlug) {
+        if (originalSlug && isMounted) {
             fetchNewsData();
         }
-    }, [originalSlug, router]);
+    }, [originalSlug, router, isMounted]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         
-        // Auto-format slug to lowercase and replace spaces with hyphens
         if (name === "slug") {
             const formattedSlug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
             setNews((prev) => ({ ...prev, [name]: formattedSlug }));
@@ -84,18 +118,15 @@ export default function AdminEditStudyNews() {
         }
     };
 
-    // Handle Image Upload (Converts file to Base64 String)
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Basic validation
         if (!file.type.startsWith("image/")) {
             alert("Please upload a valid image file.");
             return;
         }
 
-        // Convert image to base64 to store in DB as a string
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onload = () => {
@@ -107,7 +138,6 @@ export default function AdminEditStudyNews() {
         };
     };
 
-    // Remove the uploaded or pasted image
     const handleRemoveImage = () => {
         setNews((prev) => ({ ...prev, coverImage: "" }));
     };
@@ -121,11 +151,9 @@ export default function AdminEditStudyNews() {
         
         setIsUpdating(true);
         try {
-            // Using PUT (or PATCH) for updates. Adjust the endpoint as needed for your API
             await axios.put(`https://www.finderight.com/api/study-news/${originalSlug}`, news);
             alert("✅ Study news updated successfully!");
             
-            // If the slug changed, optionally redirect to the new slug's edit page
             if (news.slug !== originalSlug) {
                  router.replace(`/admin/edit-study-news/${news.slug}`);
             }
@@ -137,8 +165,8 @@ export default function AdminEditStudyNews() {
         }
     };
 
-    // Loading State UI
-    if (isLoading) {
+    // ✅ Wait for mount to avoid hydration mismatch, and show loader while fetching
+    if (!isMounted || isLoading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
                 <CircularProgress />
@@ -156,8 +184,8 @@ export default function AdminEditStudyNews() {
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={3}>
                         
-                        {/* Title Field (Single Title for both Form and SEO) */}
-                        <Grid item xs={12}>
+                        {/* ✅ Updated to MUI v6 Grid size API */}
+                        <Grid size={{ xs: 12 }}>
                             <Typography variant="subtitle1" gutterBottom>
                                 Title <span style={{ color: "#DC2626" }}>*</span>
                             </Typography>
@@ -171,8 +199,7 @@ export default function AdminEditStudyNews() {
                             />
                         </Grid>
 
-                        {/* --- SEO SETTINGS SECTION --- */}
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                             <Box sx={{ mt: 2, mb: 1 }}>
                                 <Typography variant="h6" sx={{ color: "#374151", fontWeight: 600 }}>
                                     SEO & URL Settings
@@ -181,8 +208,7 @@ export default function AdminEditStudyNews() {
                             </Box>
                         </Grid>
 
-                        {/* Slug Field */}
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <Typography variant="subtitle1" gutterBottom>
                                 URL Slug <span style={{ color: "#DC2626" }}>*</span>
                             </Typography>
@@ -197,8 +223,7 @@ export default function AdminEditStudyNews() {
                             />
                         </Grid>
 
-                        {/* Keywords Field */}
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <Typography variant="subtitle1" gutterBottom>
                                 Keywords
                             </Typography>
@@ -211,8 +236,7 @@ export default function AdminEditStudyNews() {
                             />
                         </Grid>
 
-                        {/* Meta Description Field */}
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                             <Typography variant="subtitle1" gutterBottom>
                                 Meta Description
                             </Typography>
@@ -226,16 +250,13 @@ export default function AdminEditStudyNews() {
                                 onChange={handleChange}
                             />
                         </Grid>
-                        {/* ----------------------------- */}
 
-                        {/* Cover Image Field (URL + Upload) */}
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                             <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
                                 Cover Image
                             </Typography>
                             
                             <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, gap: 2, alignItems: { xs: "stretch", sm: "flex-start" } }}>
-                                {/* URL Input */}
                                 <TextField
                                     fullWidth
                                     name="coverImage"
@@ -249,8 +270,6 @@ export default function AdminEditStudyNews() {
                                     <Typography variant="body2" color="text.secondary" sx={{ fontWeight: "bold" }}>
                                         OR
                                     </Typography>
-
-                                    {/* Upload Button */}
                                     <Button
                                         variant="outlined"
                                         component="label"
@@ -267,7 +286,6 @@ export default function AdminEditStudyNews() {
                                 </Box>
                             </Box>
 
-                            {/* Image Preview */}
                             {news.coverImage && (
                                 <Box sx={{ position: "relative", mt: 3, display: "inline-block" }}>
                                     <Box
@@ -283,7 +301,6 @@ export default function AdminEditStudyNews() {
                                             display: "block"
                                         }}
                                         onError={(e) => {
-                                            // Fallback if the pasted URL is broken
                                             e.target.style.display = 'none';
                                         }}
                                     />
@@ -300,8 +317,8 @@ export default function AdminEditStudyNews() {
                             )}
                         </Grid>
 
-                        {/* Rich Description Field with Preview Button */}
-                        <Grid item xs={12}>
+                        {/* ✅ React Quill Editor */}
+                        <Grid size={{ xs: 12 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                 <Typography variant="subtitle1">
                                     Description <span style={{ color: "#DC2626" }}>*</span>
@@ -312,26 +329,34 @@ export default function AdminEditStudyNews() {
                                     startIcon={<Visibility />}
                                     onClick={() => setPreviewOpen(true)}
                                 >
-                                    Preview Editor
+                                    Preview Article
                                 </Button>
                             </Box>
-                            <TipTapEditor
-                                content={news.description}
-                                onChange={(value) =>
-                                    setNews((prev) => ({ ...prev, description: value }))
-                                }
-                            />
+                            
+                            <Box sx={{ 
+                                '.ql-container': { minHeight: '300px', fontSize: '16px' },
+                                '.ql-editor': { minHeight: '300px' } 
+                            }}>
+                                <ReactQuill
+                                    theme="snow"
+                                    value={news.description}
+                                    onChange={(value) => setNews((prev) => ({ ...prev, description: value }))}
+                                    modules={quillModules}
+                                    formats={quillFormats}
+                                    placeholder="Write an amazing article here..."
+                                />
+                            </Box>
+                            
                             <Typography
                                 variant="caption"
                                 display="block"
                                 sx={{ mt: 1, fontSize: 12, color: "#4B5563" }}
                             >
-                                You can paste images or use HTML-friendly formatting.
+                                Use the toolbar to add headings, links, images, and formatting.
                             </Typography>
                         </Grid>
 
-                        {/* Submit Button */}
-                        <Grid item xs={12}>
+                        <Grid size={{ xs: 12 }}>
                             <Button
                                 type="submit"
                                 variant="contained"
@@ -347,7 +372,6 @@ export default function AdminEditStudyNews() {
                 </form>
             </Paper>
 
-            {/* --- HTML Preview Dialog --- */}
             <Dialog 
                 open={previewOpen} 
                 onClose={() => setPreviewOpen(false)}
@@ -355,14 +379,13 @@ export default function AdminEditStudyNews() {
                 fullWidth
             >
                 <DialogTitle sx={{ fontWeight: 'bold', color: '#1976d2', borderBottom: '1px solid #e0e0e0' }}>
-                    Study News Editor Preview
+                    Article Preview
                 </DialogTitle>
                 <DialogContent sx={{ backgroundColor: '#f9f9f9', minHeight: '400px', p: 4 }}>
                     <Paper elevation={1} sx={{ p: 3, minHeight: '350px' }}>
                         {news.description ? (
                             <Box 
-                                className="prose max-w-none" 
-                                // ✅ We run decodeHtml() before rendering it
+                                className="prose max-w-none ql-editor" // ✅ Added ql-editor class for exact styling match
                                 dangerouslySetInnerHTML={{ __html: decodeHtml(news.description) }} 
                                 sx={{
                                     '& img': { maxWidth: '100%', height: 'auto', borderRadius: 1 },
